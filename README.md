@@ -1,2 +1,4 @@
 # leitner-yichus
-Leitner yichus (family tree) - mirror of leitner-yichus.sites.tab.bot
+
+יחוס משפחת לייטנער - https://handyequip5003.github.io/leitner-yichus/
+(mirror of https://leitner-yichus.sites.tab.bot/)
