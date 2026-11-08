@@ -8,7 +8,7 @@ const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
-const W=250,H=112,GX=24,RH=190,SIBW=W+14;
+const W=250,H=158,GX=40,RH=H+120,SIBW=W+34;  // Alter 11:05: the first site's spacing (card 250 wide, 120 between generations, 34–40 between cards)
 const MKN={ok:"באשטעטיגט פון א מקור",alt:"פון אלטר אליין",inf:"אָפּגעלערנט פון מקורות (נישט גלייך געשריבן)",unv:"נישט באשטעטיגט (פון אן אילן / מסורה)"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 /* ---------- layout: tidy ancestor tree with contours (root at bottom) ---------- */
@@ -43,17 +43,18 @@ for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(
 for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
 let minX=1e9,maxX=-1e9; for(const id of ids){ minX=Math.min(minX,N[id].x-W/2); maxX=Math.max(maxX,N[id].x+W/2); }
 /* ---------- text prep (wrapped once, world units) ---------- */
-const FN='700 16.5px FRL, "Frank Ruhl Libre", serif', FD='400 12.5px FRL, "Frank Ruhl Libre", serif', FT='italic 400 12.5px FRL, "Frank Ruhl Libre", serif';
+const FN='700 17px FRL, "Frank Ruhl Libre", serif', FD='400 13px FRL, "Frank Ruhl Libre", serif', FT='italic 400 13.5px FRL, "Frank Ruhl Libre", serif';
 function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
   for(const x of w){ const tr=cur?cur+" "+x:x; if(cx.measureText(tr).width<=maxw) cur=tr; else { if(cur) out.push(cur); cur=x; if(out.length===maxl) break; } }
   if(out.length<maxl&&cur) out.push(cur); if(out.length>maxl) out.length=maxl;
   if(out.length===maxl&&w.join(" ").length>out.join(" ").length+1){ let s=out[maxl-1]; while(s.length>1&&cx.measureText(s+"…").width>maxw) s=s.slice(0,-1); out[maxl-1]=s+"…"; }
   return out; }
-const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id); const tw=por?W-103:W-39;  // keeps text clear of the mark circle and the portrait
+const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id); const tw=por?W-109:W-39;  // keeps text clear of the mark circle and the portrait
   const fit=t=>{ cx.font=FD; if(cx.measureText(t).width<=tw-14) return t; let q=t; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
   const fitT=t=>{ cx.font=FT; let q=t; if(cx.measureText(q).width<=tw-14) return q; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
   const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl);
-  return TX[id]={nm:wrap(p.n,FN,tw-6,2),dt:p.d?fit(p.d):"",ti:tl?fitT(tl):"",rab,dtl:1e9,dtc:fit,por}; }
+  const til=tl?wrap(tl,FT,tw-14,2):[];
+  return TX[id]={nm:wrap(p.n,FN,tw-6,2),dt:p.d?fit(p.d):"",pl:p.pl?fit(p.pl):"",ti:til,rab,dtl:1e9,dtc:fit,por}; }
 function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m.k||"x")[0],cap:m.cap,cr:m.cr,u:m.u}));
   return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
 function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
@@ -110,18 +111,21 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   cx.save(); rr(x,y,W,H,10); cx.clip(); cx.fillStyle=col; cx.fillRect(x,y,W,root?7:5); cx.restore();
   if(lod<75){ cx.fillStyle=C.ink; cx.font='700 34px FRL, serif'; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; const t=txt(id).nm[0]||""; cx.fillText(t.length>11?t.slice(0,11)+"…":t,n.x,y+H/2+3); cx.direction="ltr"; markAt(x+16,y+20,m,10); return; }
   const T=txt(id); let rx=x+W-13;
-  if(T.por){ const R=27, pcx=x+W-13-R, pcy=y+14+R+4;
+  if(T.por){ const R=30, pcx=x+W-13-R, pcy=y+16+R+4;
     if(lod>105){ const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
       if(im){ const r=Math.max(2*R/im.width,2*R/im.height); cx.drawImage(im,pcx-im.width*r/2,pcy-R-(im.height*r-2*R)*0.2,im.width*r,im.height*r); } else { cx.fillStyle="#efe5cf"; cx.fill(); }
       cx.restore(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.lineWidth=Math.max(1.2,1/s); cx.strokeStyle=col; cx.stroke(); }
     rx=x+W-13-2*R-10; }
   cx.direction="rtl"; cx.textAlign="right"; cx.textBaseline="alphabetic";
-  let yy=y+28; if(T.rab&&!mes){ crest(rx-4,yy-6,4.2); }
+  let yy=y+30; if(T.rab&&!mes){ crest(rx-4,yy-6,4.4); }
   cx.fillStyle=C.ink; cx.font=FN; const off=T.rab&&!mes?12:0;
-  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=20; });
-  if(mes){ cx.font='600 11.5px FRL, serif'; cx.fillStyle=C.gold; cx.fillText("לויט מסורה",rx,yy+1); yy+=17; }
-  else if(T.ti){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; cx.fillText(T.ti,rx,yy+1); yy+=17; }
-  if(T.dt){ cx.font=FD; cx.fillStyle=C.date; cx.fillText(T.dt,rx,Math.min(yy+2,y+H-10)); }
+  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=21; });
+  yy+=2;
+  if(mes){ cx.font='600 12.5px FRL, serif'; cx.fillStyle=C.gold; cx.fillText("לויט מסורה",rx,yy); yy+=18; }
+  else if(T.ti.length){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; for(const l of T.ti){ cx.fillText(l,rx,yy); yy+=17; } }
+  cx.font=FD; cx.fillStyle=C.date;
+  const lines=[T.pl,T.dt].filter(Boolean); let yb=y+H-12-(lines.length-1)*17; yb=Math.max(yb,yy+2);
+  for(const l of lines){ if(yb>y+H-8) break; cx.fillText(l,rx,yb); yb+=17; }
   cx.direction="ltr";
   markAt(x+18,y+21,m,10.5); }
 let raf=0; function loop(){ raf=requestAnimationFrame(loop); if(inertia()) dirty=true; if(dirty) draw(); }
