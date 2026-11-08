@@ -8,7 +8,7 @@ const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
-const W=250,H=158,GX=40,RH=H+120,SIBW=W+34;  // Alter 11:05: the first site's spacing (card 250 wide, 120 between generations, 34–40 between cards)
+const W=250,H=158,GX=90,GG=150,RH=H+240,SIBW=W+GX;  // Alter 12:53: much more room so every line can be followed  // Alter 11:05: the first site's spacing (card 250 wide, 120 between generations, 34–40 between cards)
 const MKN={ok:"באשטעטיגט פון א מקור",alt:"פון אלטר אליין",inf:"אָפּגעלערנט פון מקורות (נישט גלייך געשריבן)",unv:"נישט באשטעטיגט (פון אן אילן / מסורה)"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 /* ---------- layout: tidy ancestor tree with contours (root at bottom) ---------- */
@@ -20,24 +20,30 @@ const tparents={}; const extra=[]; // extra = cross links (pedigree collapse)
   while(q.length){ const nq=[]; for(const id of q){ const u=UP[id]||[]; tparents[id]=[];
       for(let k=0;k<2;k++){ const p=u[k]; if(!p||!P[p]) continue; if(seen.has(p)){ extra.push([id,p]); continue; } seen.add(p); N[p]={dep:N[id].dep+1,ch:id}; tparents[id].push(p); nq.push(p);} }
     q=nq; } })();
-// layered layout (Nov 8 redesign): each generation is one row; parents sit over their child, rows packed tight with
-// isotonic regression (pool-adjacent-violators) so nothing overlaps and nothing drifts further than it must.
+// subtree-centred layout (Alter 12:53 + root 17:55): each couple sits directly above its child; contours keep every
+// subtree apart (GX inside a family, GX+GG between families), so lines run straight and never cross or pass behind a card.
 const PITCH=W+GX;
-function packRow(items){ // items: [{id,t}] sorted by t -> x
-  const n=items.length; const blk=[]; // blocks of {sum,cnt,start}
-  for(let i=0;i<n;i++){ let b={sum:items[i].t-i*PITCH,cnt:1,start:i}; blk.push(b);
-    while(blk.length>1){ const a=blk[blk.length-2], c=blk[blk.length-1]; if(a.sum/a.cnt<=c.sum/c.cnt) break; a.sum+=c.sum; a.cnt+=c.cnt; blk.pop(); } }
-  for(const b of blk){ const q=b.sum/b.cnt; for(let k=b.start;k<b.start+b.cnt;k++) N[items[k].id].x=q+k*PITCH; } }
-(function layered(){ N[ROOT].x=0; N[ROOT].y=0; let row=[ROOT]; let d=0;
-  while(row.length){ const items=[]; let seq=0;
-    for(const id of row){ const n=N[id]; const ps=tparents[id]||[]; const u=UP[id]||[]; n.po=ps.map(p=>[p,0]);
-      const fa=ps.includes(u[0])?u[0]:null, mo=ps.includes(u[1])?u[1]:null; const two=fa&&mo;
-      const add=(p,t,side)=>{ items.push({id:p,t,seq:seq++}); (sibsOf[p]||[]).forEach((sb,k)=>{ N[sb]={dep:d+1,sibof:p}; items.push({id:sb,t:t+side*(k+1)*PITCH,seq:seq++}); }); };
-      if(mo) add(mo,two?n.x-PITCH/2:n.x,-1); if(fa) add(fa,two?n.x+PITCH/2:n.x,1); }
-    items.sort((a,b)=>a.t-b.t||a.seq-b.seq); packRow(items); d++;
-    for(const it of items){ N[it.id].y=-d*RH; N[it.id].dep=d; }
-    row=items.filter(it=>!N[it.id].sibof).map(it=>it.id); } })();
-for(const a in sibsOf){ if(N[a]&&N[a].dep===0) sibsOf[a].forEach((sb,k)=>{ N[sb]={x:N[a].x-(k+1)*PITCH,y:0,dep:0,sibof:a}; }); }
+function lay(id){
+  const ps=tparents[id]||[]; const u=UP[id]||[]; const ns=(sibsOf[id]||[]).length;
+  const own={l:[-W/2-(u[1]===id?0:0)], r:[W/2]};
+  // siblings sit beside the anchor, on the side away from its spouse: extend the anchor's own contour
+  const sw=ns*SIBW; N[id].sw=sw;
+  if(!ps.length){ N[id].po=[]; return {l:[-W/2-sw], r:[W/2]}; }
+  const fa=ps.includes(u[0])?u[0]:null, mo=ps.includes(u[1])?u[1]:null;
+  const ord=[mo,fa].filter(Boolean); const cs=ord.map(lay); const off=[0];
+  let acc={l:cs[0].l.slice(),r:cs[0].r.slice()};
+  for(let k=1;k<cs.length;k++){ const c=cs[k]; let sh=-1e12; const m=Math.min(acc.r.length,c.l.length);
+    for(let d=0;d<m;d++) sh=Math.max(sh,acc.r[d]-c.l[d]+(d===0?GX:GX+GG)); if(sh<-1e11) sh=W+GX;
+    off.push(sh); const L=Math.max(acc.l.length,c.l.length); const nl=[],nr=[];
+    for(let d=0;d<L;d++){ const al=acc.l[d], cl=c.l[d]; nl.push(al==null?cl+sh:cl==null?al:Math.min(al,cl+sh)); const ar=acc.r[d], cr=c.r[d]; nr.push(ar==null?cr+sh:cr==null?ar:Math.max(ar,cr+sh)); }
+    acc={l:nl,r:nr}; }
+  const mid=(off[0]+off[off.length-1])/2;
+  N[id].po=ord.map((p,k)=>[p,off[k]-mid]);
+  const res={l:[-W/2-sw],r:[W/2]}; for(let d=0;d<acc.l.length;d++){ res.l.push(acc.l[d]-mid); res.r.push(acc.r[d]-mid); }
+  return res; }
+lay(ROOT);
+(function place(){ const st=[[ROOT,0]]; while(st.length){ const [id,x]=st.pop(); const n=N[id]; n.x=x; n.y=-n.dep*RH; for(const [p,o] of n.po||[]) st.push([p,x+o]); } })();
+for(const a in sibsOf){ if(!N[a]||N[a].sibof) continue; sibsOf[a].forEach((sb,k)=>{ N[sb]={x:N[a].x-(k+1)*SIBW,y:N[a].y,dep:N[a].dep,sibof:a}; }); }
 const ids=Object.keys(N); const rows={}; let maxDep=0;
 for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(n.dep>maxDep) maxDep=n.dep; }
 for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
@@ -65,11 +71,14 @@ function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
 const isURI=f=>/^data:|\//.test(f)&&!/^[mtz]\//.test(f);
 const AB=/\.sites\.tab\.bot$/.test(location.hostname)?"https://handyequip5003.github.io/leitner-yichus/":"";  // tab.bot copy reads pictures + detail chunks from the GitHub Pages copy
 const SRC=(f,tier)=>f.startsWith("data:")?f:AB+(/^[mtz]\//.test(f)?tier+f.slice(1):f.includes("/")?f:tier+"/"+f+".jpg");
+/* ---------- what's new (Alter 12:51): highlights what the last publish added ---------- */
+const LN=D.lastNew||null; const NEWS=LN?Object.keys(LN.ids).filter(k=>P[k]):[]; const NEWSET=new Set(NEWS); let wnOn=false, wnI=-1;
+NEWS.sort((a,b)=>(N[a]?N[a].dep:0)-(N[b]?N[b].dep:0));
 /* ---------- view state ---------- */
 let s=0.9,tx=0,ty=0,dpr=Math.min(2,window.devicePixelRatio||1),vw=0,vh=0,dirty=true,sel=null;
 function resize(){ vw=innerWidth; vh=innerHeight; cv.width=Math.round(vw*dpr); cv.height=Math.round(vh*dpr); dirty=true; }
 addEventListener("resize",resize); resize();
-const clampS=v=>Math.max(0.025,Math.min(3,v));
+const clampS=v=>Math.max(0.006,Math.min(3,v));
 function req(){ dirty=true; }
 /* ---------- images on cards ---------- */
 const IMG={}; function img(src){ let o=IMG[src]; if(o) return o.ok?o.im:null; o=IMG[src]={im:new Image(),ok:false}; o.im.decoding="async"; o.im.onload=()=>{o.ok=true;req();}; o.im.src=src; return null; }
@@ -89,23 +98,31 @@ function draw(){
     if(d%2===1){ cx.fillStyle="rgba(150,110,50,.055)"; cx.fillRect(0,top,vw,RH*s); }
     if(d%step===0&&d>0&&s>0.05){ cx.fillStyle="rgba(110,80,35,.55)"; cx.fillText("דור "+d,vw-8,top+11); } }
   cx.setTransform(dpr*s,0,0,dpr*s,dpr*tx,dpr*ty);
-  // curved connectors in the parent's family colour
-  const lw=Math.max(1.5,1/s); cx.lineWidth=lw; cx.globalAlpha=s<0.1?0.5:0.7;
+  // connectors: child top -> mid-gap -> across -> up to the parent; family colour of the parent; the tapped card's links bold
+  const gapTop=RH-H, rad=16, lw=Math.max(2.2,1.2/s);
+  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop/2; cx.strokeStyle=bc(p); cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
+    if(Math.abs(q.x-n.x)<1) cx.lineTo(q.x,yb);
+    else { const sg=q.x>n.x?1:-1, r=Math.min(rad,Math.abs(q.x-n.x)/2); cx.lineTo(n.x,lane+r); cx.quadraticCurveTo(n.x,lane,n.x+sg*r,lane); cx.lineTo(q.x-sg*r,lane); cx.quadraticCurveTo(q.x,lane,q.x,lane-r); cx.lineTo(q.x,yb); }
+    cx.stroke(); };
+  cx.lineJoin="round"; cx.lineCap="round"; cx.globalAlpha=s<0.1?0.6:0.85;
   for(let d=Math.max(0,d0-1);d<=d1;d++){ const row=rows[d]; if(!row) continue;
     for(const id of row){ const n=N[id]; if(!n.po||!n.po.length) continue;
-      for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue;
-        const ya=n.y, yb=q.y+H, ym=(ya+yb)/2; cx.strokeStyle=bc(p); cx.beginPath(); cx.moveTo(n.x,ya); cx.bezierCurveTo(n.x,ym,q.x,ym,q.x,yb); cx.stroke(); } } }
+      for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue; link(n,q,p,false); } } }
   cx.globalAlpha=1;
-  if(s>0.12){ cx.strokeStyle=C.lineX; cx.lineWidth=Math.max(1.2,1/s); cx.setLineDash([7,5]); cx.beginPath();
-    for(const [c,p] of extra){ const a=N[c],b=N[p]; if(!a||!b) continue; if(Math.max(a.x,b.x)<x0||Math.min(a.x,b.x)>x1||Math.max(a.y,b.y)<y0-H||Math.min(a.y,b.y)>y1) continue;
-      cx.moveTo(a.x,a.y); cx.bezierCurveTo(a.x,a.y-RH*.6,b.x,b.y+H+RH*.4,b.x,b.y+H); }
-    cx.stroke(); cx.setLineDash([]); }
+  if(sel&&N[sel]){ const n=N[sel]; for(const [p] of n.po||[]) link(n,N[p],p,true); if(n.ch&&N[n.ch]) link(N[n.ch],n,sel,true);
+    // a second line of descent (pedigree collapse) shows only for the tapped card, dashed
+    cx.setLineDash([10,8]); cx.lineWidth=lw*1.4; cx.strokeStyle="rgba(176,86,63,.7)";
+    for(const [c,p] of extra){ if(c!==sel&&p!==sel) continue; const a_=N[c],b_=N[p]; if(!a_||!b_) continue; cx.beginPath(); cx.moveTo(a_.x,a_.y); cx.bezierCurveTo(a_.x,a_.y-RH*.6,b_.x,b_.y+H+RH*.4,b_.x,b_.y+H); cx.stroke(); }
+    cx.setLineDash([]); }
   const lod=s*W; let drawn=0;
   for(let d=d0;d<=d1;d++){ const row=rows[d]; if(!row) continue;
     let lo=0,hi=row.length; while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2<x0) lo=m+1; else hi=m; }
     for(let i=lo;i<row.length;i++){ const id=row[i], n=N[id]; if(n.x-W/2>x1) break; drawn++; card(id,n,lod); } }
   return drawn; }
 function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.mes, root=id===ROOT, col=bc(id);
+  const hl=wnOn&&NEWSET.has(id);
+  if(hl){ cx.save(); cx.shadowColor="rgba(214,170,60,.9)"; cx.shadowBlur=28*Math.min(1,s*2)+6; cx.fillStyle="rgba(230,190,90,.55)"; rr(x-10,y-10,W+20,H+20,16); cx.fill(); cx.restore();
+    cx.lineWidth=Math.max(3,3/s); cx.strokeStyle="#c9a35c"; rr(x-7,y-7,W+14,H+14,14); cx.stroke(); }
   if(lod<34){ cx.fillStyle=C.card; cx.fillRect(x,y,W,H); cx.fillStyle=col; cx.fillRect(x,y,W,14); if(id===sel){cx.strokeStyle=C.sel;cx.lineWidth=3/s;cx.strokeRect(x,y,W,H);} return; }
   cx.fillStyle="rgba(80,55,20,.10)"; rr(x+1,y+3,W,H,10); cx.fill();   // soft shadow (no blur)
   rr(x,y,W,H,10); cx.fillStyle=mes?C.cardMes:root?"#fffdf5":C.card; cx.fill();
@@ -114,7 +131,7 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   // family-colour top edge
   cx.save(); rr(x,y,W,H,10); cx.clip(); cx.fillStyle=col; cx.fillRect(x,y,W,root?7:5); cx.restore();
   if(lod<140){ const M=txt(id).mid; cx.fillStyle=C.ink; cx.font=M.f; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl";
-    const lh=M.z*1.12, n0=M.ls.length; let yy=y+H/2+6-(n0-1)*lh/2; for(const l of M.ls){ cx.fillText(l,n.x,yy); yy+=lh; } cx.direction="ltr"; markAt(x+16,y+20,m,10); return; }
+    const lh=M.z*1.12, n0=M.ls.length; let yy=y+H/2+6-(n0-1)*lh/2; for(const l of M.ls){ cx.fillText(l,n.x,yy); yy+=lh; } cx.direction="ltr"; markAt(x+16,y+20,m,10); if(hl) newBadge(x+W-6,y-14,1.8); return; }
   const T=txt(id); let rx=x+W-13;
   if(T.por){ const R=30, pcx=x+W-13-R, pcy=y+16+R+4;
     if(lod>105){ const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
@@ -132,7 +149,8 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   const lines=[T.pl,T.dt].filter(Boolean); let yb=y+H-12-(lines.length-1)*17; yb=Math.max(yb,yy+2);
   for(const l of lines){ if(yb>y+H-8) break; cx.fillText(l,rx,yb); yb+=17; }
   cx.direction="ltr";
-  markAt(x+18,y+21,m,10.5); }
+  markAt(x+18,y+21,m,10.5); if(hl) newBadge(x+W-8,y-6,1); }
+function newBadge(xr,yt,k){ const w=46*k,h=22*k; cx.fillStyle="#b08d57"; rr(xr-w,yt,w,h,h/2); cx.fill(); cx.fillStyle="#fff"; cx.font="700 "+(13*k)+"px FRL, serif"; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.fillText("נייַ",xr-w/2,yt+h/2+1); cx.direction="ltr"; }
 let raf=0; function loop(){ raf=requestAnimationFrame(loop); if(inertia()) dirty=true; if(dirty) draw(); }
 /* ---------- gestures: pan with inertia, pinch, wheel, tap, double-tap ---------- */
 const ptr=new Map(); let vx=0,vy=0,lastT=0,moved=0,pinch=null,downAt=0,lastTap=0,anim=null;
@@ -177,7 +195,8 @@ function head(id,p){ const m=p.m||"unv"; return (p.mes?`<div class="mesl">לוי
   ((p.d||p.pl)?`<p class="meta">${esc([p.d,p.pl].filter(Boolean).join(" · "))}</p>`:"")+`<div class="mark"><span class="dot ${m}">${(MKC[m]||MKC.unv)[1]}</span>${esc(MKN[m]||"")}</div>`; }
 function body(id,p){ let h=""; const u=UP[id]||[];
   const ms=(p.media||[]).length?p.media.map(x=>({f:x.f,cap:x.cap,cr:x.cr,u:x.u})):[]; curMed=ms;
-  if(ms.length) h+=`<div class="gal">`+ms.map((x,i)=>`<figure data-i="${i}"><img loading="lazy" decoding="async" src="${esc(SRC(x.f,"t"))}" alt=""><figcaption>${esc(x.cap||"")}</figcaption></figure>`).join("")+`</div><div class="gn">${ms.length>1?ms.length+" בילדער · ":""}טאפ פאר פולער גרייס</div>`;
+  const NP=new Set(((LN&&LN.ids[id]&&LN.ids[id].p)||[])); const isNP=f=>wnOn&&(NP.has(f)||NP.has(String(f).replace(/^m\//,"").replace(/\.jpg$/,"")));
+  if(ms.length) h+=`<div class="gal">`+ms.map((x,i)=>`<figure data-i="${i}" class="${isNP(x.f)?"nw":""}">${isNP(x.f)?'<span class="nwb">נייַ</span>':""}<img loading="lazy" decoding="async" src="${esc(SRC(x.f,"t"))}" alt=""><figcaption>${esc(x.cap||"")}</figcaption></figure>`).join("")+`</div><div class="gn">${ms.length>1?ms.length+" בילדער · ":""}טאפ פאר פולער גרייס</div>`;
   h+=`<div class="fam">`; if(u[0]&&P[u[0]]) h+=`<div><b>טאטע</b><span>${nameLink(u[0])}</span></div>`; if(u[1]&&P[u[1]]) h+=`<div><b>מאמע</b><span>${nameLink(u[1])}</span></div>`;
   const ks=(kids[id]||[]).filter(c=>P[c]); if(ks.length) h+=`<div><b>קינדער</b><span>${ks.map(nameLink).join(" · ")}</span></div>`;
   const sp=[]; for(const c of ks){ const cu=UP[c]||[]; const o=cu[0]===id?cu[1]:cu[0]; if(o&&P[o]&&!sp.includes(o)) sp.push(o); } if(sp.length) h+=`<div><b>זיווג</b><span>${sp.map(nameLink).join(" · ")}</span></div>`;
@@ -185,7 +204,9 @@ function body(id,p){ let h=""; const u=UP[id]||[];
   h+=`</div>`;
   const lm=LM[id]; if(lm&&lm[1]) h+=`<p class="note2">${esc(lm[1])}</p>`;
   if(p.inhw) h+=`<p class="note2">${esc(p.inhw)}</p>`;
-  if(p.x) h+=`<div class="tx">${esc(p.x)}</div>`;
+  const NI=LN&&LN.ids[id]; const nf=new Set(((NI&&NI.f)||[]).map(t=>t.trim()));
+  if(NI&&wnOn) h=`<p class="note2" style="color:#8a6a2c"><span class="nwb">נייַ</span> ${NI.c?"א נייַער קאַרטל · ":""}${(NI.f||[]).length} נייַע פאַקטן${(NI.p||[]).length?" · "+NI.p.length+" נייַע בילדער":""} (${esc(LN.date)})</p>`+h;
+  if(p.x) h+=`<div class="tx">`+p.x.split("\n").filter(l=>l.trim()).map(l=>{ const isN=wnOn&&nf.has(l.trim()); return `<div class="ln${isN?" nw":""}">${isN?'<span class="nwb">נייַ</span>':""}${esc(l)}</div>`; }).join("")+`</div>`;
   if(p.src) h+=`<div class="src">${esc(p.src)}</div>`;
   if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t||"מקור")} ↗</a>`).join("")+`</div>`;
   return h; }
@@ -228,6 +249,15 @@ document.getElementById("zx").onclick=closeZoom;
   zst.addEventListener("wheel",e=>{ e.preventDefault(); const ns=Math.max(zb,Math.min(zb*8,zs*Math.exp(-e.deltaY*0.002))); const wx=(e.clientX-zx)/zs, wy=(e.clientY-zy)/zs; zs=ns; zx=e.clientX-wx*zs; zy=e.clientY-wy*zs; zApply(); },{passive:false});
   addEventListener("resize",()=>{ if(zv.classList.contains("on")) zFit(); }); })();
 addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("on")) closeZoom(); else closeSheet(); } else if(zv.classList.contains("on")&&(e.key==="ArrowLeft"||e.key==="ArrowRight")) openZoom(zI+(e.key==="ArrowLeft"?1:-1)); });
+/* what's new controls */
+(function(){ const bt=document.getElementById("wn"), bar=document.getElementById("wnb"), t=document.getElementById("wnt");
+  if(!LN||!NEWS.length) return; bt.hidden=false; const ni=LN.n_items||NEWS.length; document.getElementById("wnc").textContent=ni;
+  const lab=()=>{ t.textContent=(wnI>=0?(wnI+1)+" / "+NEWS.length+" · ":"")+ni+" נייַע זאַכן אין "+NEWS.length+" קאַרטלעך"; };
+  const go=k=>{ wnI=(k+NEWS.length)%NEWS.length; const id=NEWS[wnI]; sel=id; if(N[id]) focus(id,Math.max(s,0.75)); lab(); dirty=true; };
+  bt.onclick=()=>{ wnOn=!wnOn; bt.classList.toggle("on",wnOn); bar.hidden=!wnOn; wnI=-1; lab(); dirty=true; if(wnOn) go(0); if(sheet.classList.contains("on")&&sel) openSheet(sel); };
+  document.getElementById("wnn").onclick=()=>go(wnI+1); document.getElementById("wnp").onclick=()=>go(wnI-1);
+  t.onclick=()=>{ if(wnI>=0) openSheet(NEWS[wnI]); };
+  window.__ywn=()=>bt.onclick(); })();
 /* ---------- start: centred on Alter at a readable zoom ---------- */
 home(); loop();
 (function fromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h) return; const [id,z]=h.split("/"); if(!P[id]) return; if(N[id]) focus(id,Math.max(0.75,s)); openSheet(id);
