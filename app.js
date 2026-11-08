@@ -3,7 +3,7 @@
 const D=window.YDATA; const P=D.people, UP=D.up||{}, LM=D.linkm||{};
 const ROOT=D.root||"alter";
 const cv=document.getElementById("cv"), cx=cv.getContext("2d");
-const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",lineX:"rgba(176,86,63,.55)",sel:"#b08d57"};
+const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
 const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f"};
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
@@ -58,7 +58,8 @@ function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m
   return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
 function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
 const isURI=f=>/^data:|\//.test(f)&&!/^[mtz]\//.test(f);
-const SRC=(f,tier)=>f.startsWith("data:")?f:/^[mtz]\//.test(f)?tier+f.slice(1):f.includes("/")?f:tier+"/"+f+".jpg";
+const AB=/\.sites\.tab\.bot$/.test(location.hostname)?"https://handyequip5003.github.io/leitner-yichus/":"";  // tab.bot copy reads pictures + detail chunks from the GitHub Pages copy
+const SRC=(f,tier)=>f.startsWith("data:")?f:AB+(/^[mtz]\//.test(f)?tier+f.slice(1):f.includes("/")?f:tier+"/"+f+".jpg");
 /* ---------- view state ---------- */
 let s=0.9,tx=0,ty=0,dpr=Math.min(2,window.devicePixelRatio||1),vw=0,vh=0,dirty=true,sel=null;
 function resize(){ vw=innerWidth; vh=innerHeight; cv.width=Math.round(vw*dpr); cv.height=Math.round(vh*dpr); dirty=true; }
@@ -154,7 +155,7 @@ document.getElementById("home").onclick=()=>{ const n=N[ROOT]; const ns=Math.min
 const DET={}; const nch=D.nch||32;
 function bucket(id){ let h=5381; for(let i=0;i<id.length;i++) h=(Math.imul(h,33)+id.charCodeAt(i))>>>0; return h%nch; }
 function details(id){ const p=P[id]; if(p.x!==undefined||p.src!==undefined||p.media) return Promise.resolve(p);
-  const b=bucket(id); if(!DET[b]) DET[b]=fetch("d/"+String(b).padStart(2,"0")+".json").then(r=>r.json()).catch(()=>({}));
+  const b=bucket(id); if(!DET[b]) DET[b]=fetch(AB+"d/"+String(b).padStart(2,"0")+".json").then(r=>r.json()).catch(()=>({}));
   return DET[b].then(c=>Object.assign({},p,c[id]||{})); }
 const sheet=document.getElementById("sheet"), sb=document.getElementById("sb");
 const nameLink=id=>P[id]?`<a href="#" data-go="${esc(id)}">${esc(P[id].n)}</a>`:"";
