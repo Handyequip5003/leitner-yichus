@@ -1,266 +1,226 @@
-(function(){
+/* יחוס משפחת לייטנער – canvas tree (Nov 8 2026 redesign): one canvas, virtualized drawing, detail sheet, zoom viewer. No libraries. */
 "use strict";
-const D=window.YDATA, P=D.people, UP=D.up, NOTES=D.notes||{};
-const W=250, WR=300, G=40, GAP=34, GAPG=60, VCH=120, CHIPW=210;
-const BR={L:["לייטנער","--L"],Y:["מאיר (די מאמע פון ר' חנינא אברהם)","--Y"],W:["וואגשאהל","--W"],S:["שפירא (לאנצהוט – דינוב)","--S"],R:["רובין – ראפשיץ – ליזשענסק","--R"],M:["מייזליש","--M"],T:["טייטלבוים","--T"],H:["האלבערשטאם (צאנז)","--H"]};
-const MK={ok:["✓","באשטעטיגט פון א מקור"],alt:["א","פון אלטר אליין"],inf:["≈","אָפּגעלערנט פון מקורות (נישט גלייך געשריבן)"],unv:["?","נישט באשטעטיגט"]};
-const HEB=["","א","ב","ג","ד","ה","ו","ז","ח","ט","י","י\"א","י\"ב","י\"ג","י\"ד","ט\"ו","ט\"ז","י\"ז","י\"ח","י\"ט","כ","כ\"א","כ\"ב","כ\"ג","כ\"ד","כ\"ה"];
-const GENW=["","טאטע","זיידע","עלטער-זיידע"];
-const css=getComputedStyle(document.documentElement);
-const col=b=>css.getPropertyValue((BR[b]||BR.L)[1]).trim()||"#7a4b2a";
+const D=window.YDATA; const P=D.people, UP=D.up||{}, LM=D.linkm||{};
+const ROOT=D.root||"alter";
+const cv=document.getElementById("cv"), cx=cv.getContext("2d");
+const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",lineX:"rgba(176,86,63,.55)",sel:"#b08d57"};
+const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f"};
+const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
+const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
+const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
+const W=250,H=112,GX=24,RH=190,SIBW=W+14;
+const MKN={ok:"באשטעטיגט פון א מקור",alt:"פון אלטר אליין",inf:"אָפּגעלערנט פון מקורות (נישט גלייך געשריבן)",unv:"נישט באשטעטיגט (פון אן אילן / מסורה)"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const world=document.getElementById("world"), svg=document.getElementById("lines"), vp=document.getElementById("vp");
-const childrenOf={}; // parent person -> [children persons in tree]
-for(const c in UP){const u=UP[c]; for(const p of u) if(p&&P[p]) (childrenOf[p]=childrenOf[p]||[]).push(c);}
-function ukey(c){const u=UP[c]; if(!u) return null; const f=u[0]&&P[u[0]]?u[0]:null, m=u[1]&&P[u[1]]?u[1]:null; if(!f&&!m) return null; return (f||"-")+"|"+(m||"-");}
-// ---------- build DAG: every person once ----------
-const inTree=new Set(); (function walk(p){ if(!p||!P[p]||inTree.has(p)) return; inTree.add(p); const u=UP[p]; if(u){ walk(u[0]); walk(u[1]); } })(D.root);
-const par=c=>{ const u=UP[c]||[]; return [u[0]&&P[u[0]]&&inTree.has(u[0])?u[0]:null, u[1]&&P[u[1]]&&inTree.has(u[1])?u[1]:null]; };
-const partners={}, male=new Set(), female=new Set();
-for(const c of inTree){ const [f,m]=par(c); if(f) male.add(f); if(m) female.add(m); if(f&&m){ (partners[f]=partners[f]||new Set()).add(m); (partners[m]=partners[m]||new Set()).add(f);} }
-const nodes=[], unitOf={}, personNode={};
-function mkUnit(ids){ const n={type:"unit",persons:ids,kidsE:[],upE:[]}; nodes.push(n); for(const p of ids){ unitOf[p]=n; personNode[p]=n; } return n; }
-// components in DFS order from root (so the initial order is the old tree's order)
-const seenP=new Set(); const order0=[];
-(function dfs(p){ if(!p||seenP.has(p)) return; seenP.add(p); order0.push(p); const [f,m]=par(p); dfs(m); dfs(f); })(D.root);
-for(const p of order0){ if(unitOf[p]) continue;
-  const comp=[]; const st=[p]; const vis=new Set([p]); while(st.length){ const q=st.pop(); comp.push(q); for(const r of (partners[q]||[])) if(!vis.has(r)){ vis.add(r); st.push(r);} }
-  let ids;
-  if(comp.length===1) ids=comp;
-  else if(comp.length===2){ const [x,y]=comp; ids = (male.has(x)&&!male.has(y))? [y,x] : (male.has(y)&&!male.has(x))? [x,y] : [x,y]; }
-  else { const hub=comp.slice().sort((x,y)=>(partners[y]||new Set()).size-(partners[x]||new Set()).size)[0]; const rest=comp.filter(x=>x!==hub); const L=rest.slice(0,Math.ceil(rest.length/2)), R=rest.slice(Math.ceil(rest.length/2)); ids=[...L,hub,...R]; }
-  mkUnit(ids); }
-// edges: one per child (child card -> parents' anchor)
-const edges=[];
-for(const c of inTree){ const [f,m]=par(c); if(!f&&!m) continue; const pu=unitOf[f||m]; const e={c,f,m,pu,cu:unitOf[c]}; edges.push(e); pu.kidsE.push(e); unitOf[c].upE.push(e); }
-// notes as chips above their person
-for(const p of inTree){ for(const t of (NOTES[p]||[])){ const n={type:"note",text:t,persons:[],kidsE:[],upE:[]}; nodes.push(n); const e={c:p,note:true,pu:n,cu:unitOf[p]}; edges.push(e); n.kidsE.push(e); unitOf[p].upE.push(e);} }
-// layers: longest path from the root (parents always above every child)
-const rootN=unitOf[D.root];
-const depthMemo=new Map();
-function depthOf(n){ if(depthMemo.has(n)) return depthMemo.get(n); depthMemo.set(n,0); let d=0; for(const e of n.kidsE) d=Math.max(d,depthOf(e.cu)+1); if(n===rootN) d=0; depthMemo.set(n,d); return d; }
-for(const n of nodes) n.depth=depthOf(n);
-// fix-point (memo guard above can under-count in rare orders)
-for(let it=0; it<6; it++){ let ch=false; for(const n of nodes){ let d=0; for(const e of n.kidsE) d=Math.max(d,e.cu.depth+1); if(n!==rootN&&d!==n.depth){ n.depth=d; ch=true; } } if(!ch) break; }
-// ---------- DOM cards ----------
-function cardHTML(id){
-  const p=P[id], m=p.m||"inf", med=p.media||[];
-  const por=med.find(x=>x.k==="portrait"); const rest=med.filter(x=>x!==por);
-  let h=`<div class="mk ${m}" title="${esc(MK[m][1])}">${MK[m][0]}</div>`;
-  if(por) h+=`<img class="pt" loading="lazy" src="${esc(por.f)}" alt="">`;
-  h+=`<div class="nm">${esc(p.n)}</div>`;
-  if(p.t) h+=`<div class="ti">${esc(p.t)}</div>`;
-  if(p.pl) h+=`<div class="pl">${esc(p.pl)}</div>`;
-  if(p.d) h+=`<div class="dt">${esc(p.d)}</div>`;
-  if(p.s) h+=`<div class="sf"><b>ספרים:</b> ${esc(p.s)}</div>`;
-  if(rest.length){ h+=`<div class="th">`+rest.slice(0,4).map(x=>`<img loading="lazy" src="${esc(x.f)}" alt="">`).join("")+(rest.length>4?`<span>+${rest.length-4}</span>`:"")+`</div>`; }
-  return h;
-}
-const el={};
-for(const n of nodes){
-  if(n.type==="unit"){ n.els=n.persons.map(id=>{const d=document.createElement("div"); d.className="p"+(P[id].m==="unv"?" unv":"")+(P[id].inh?" inh":"")+(id===D.root?" root":""); d.dataset.id=id; d.style.setProperty("--bc",col(P[id].br)); d.innerHTML=cardHTML(id); world.appendChild(d); el[id]=d; return d;});
-    n.infs=[]; for(let i=0;i<n.persons.length-1;i++){ const s_=document.createElement("div"); s_.className="inf8"; s_.textContent="∞"; world.appendChild(s_); n.infs.push(s_); } }
-  else { const d=document.createElement("div"); d.className="chip "+n.type; d.textContent=n.text; world.appendChild(d); n.els=[d]; }
-}
-// ---------- measure & layout (layered DAG, crossing reduction, isotonic x) ----------
-function pw(id){return id===D.root?WR:W;}
-function nodeW(n){ if(n.type!=="unit") return CHIPW; return n.persons.reduce((s_,id)=>s_+pw(id),0)+G*(n.persons.length-1); }
-function personOff(n,id){ let x=-nodeW(n)/2; for(const q of n.persons){ if(q===id) return x+pw(q)/2; x+=pw(q)+G; } return 0; }
-function anchorOff(n,e){ if(n.type!=="unit") return 0; if(e.f&&e.m){ return (personOff(n,e.f)+personOff(n,e.m))/2; } return personOff(n,e.f||e.m); }
-let maxDepth=0; for(const n of nodes) maxDepth=Math.max(maxDepth,n.depth);
-const layers=[]; for(let d=0; d<=maxDepth; d++) layers.push([]);
-{ const seen=new Set(); const q=[rootN]; seen.add(rootN); while(q.length){ const n=q.shift(); layers[n.depth].push(n); const ups=[]; for(const id of n.persons){ for(const e of unitOf[id].upE) if(e.cu===n&&e.c===id) ups.push(e.pu); } for(const u of ups) if(!seen.has(u)){ seen.add(u); q.push(u);} }
-  for(const n of nodes) if(!seen.has(n)) layers[n.depth].push(n); }
-function pack(){ for(const L of layers){ let x=0; for(const n of L){ const w=nodeW(n); n.x=x+w/2; x+=w+GAPG; } } }
-const childX=(n)=>{ const xs=[]; for(const e of n.kidsE){ xs.push(e.cu.x+(e.cu.type==="unit"?personOff(e.cu,e.c):0) - anchorOff(n,e)); } return xs; };
-const parentX=(n)=>{ const xs=[]; for(const e of n.upE){ xs.push(e.pu.x+anchorOff(e.pu,e) - (n.type==="unit"?personOff(n,e.c):0)); } return xs; };
-const avg=a=>a.length?a.reduce((s_,v)=>s_+v,0)/a.length:null;
-function sweep(){ for(let d=1; d<=maxDepth; d++){ const L=layers[d]; L.forEach((n,i)=>{ const b=avg(childX(n)); n.bc=b==null?(n.x):b; n.oi=i; }); L.sort((a_,b_)=>a_.bc-b_.bc||a_.oi-b_.oi); let x=0; for(const n of L){ const w=nodeW(n); n.x=x+w/2; x+=w+GAPG; } }
-  for(let d=maxDepth-1; d>=1; d--){ const L=layers[d]; L.forEach((n,i)=>{ const b=avg(parentX(n)); n.bc=b==null?n.x:b; n.oi=i; }); L.sort((a_,b_)=>a_.bc-b_.bc||a_.oi-b_.oi); let x=0; for(const n of L){ const w=nodeW(n); n.x=x+w/2; x+=w+GAPG; } } }
-function flipUnits(){ for(const n of nodes){ if(n.type!=="unit"||n.persons.length<2) continue;
-    const px=id=>{ const e=unitOf[id].upE.find(e_=>e_.c===id&&!e_.note); return e? e.pu.x+anchorOff(e.pu,e) : null; };
-    if(n.persons.length===2){ const [a_,b_]=n.persons; const xa=px(a_), xb=px(b_); if(xa!=null&&xb!=null&&xa>xb) n.persons=[b_,a_]; else if(xa!=null&&xb==null&&xa>n.x) n.persons=[b_,a_]; else if(xb!=null&&xa==null&&xb<n.x) n.persons=[b_,a_]; } } }
-function iso(L){ // place layer L at desired n.dx keeping order and gaps: isotonic regression (pool adjacent violators)
-  const k=L.length; if(!k) return; const sft=[0]; for(let i=1;i<k;i++) sft.push(sft[i-1]+nodeW(L[i-1])/2+nodeW(L[i])/2+(L[i-1].type==="unit"&&L[i].type==="unit"?GAPG:GAP));
-  const y=L.map((n,i)=>n.dx-sft[i]); const blocks=[]; for(let i=0;i<k;i++){ blocks.push({s:y[i],c:1,i0:i,i1:i}); while(blocks.length>1&&blocks[blocks.length-2].s/blocks[blocks.length-2].c>blocks[blocks.length-1].s/blocks[blocks.length-1].c){ const b2=blocks.pop(), b1=blocks.pop(); blocks.push({s:b1.s+b2.s,c:b1.c+b2.c,i0:b1.i0,i1:b2.i1}); } }
-  for(const b of blocks){ const v=b.s/b.c; for(let i=b.i0;i<=b.i1;i++) L[i].x=v+sft[i]; } }
-function relax(rounds){ for(let r=0;r<rounds;r++){ const down=r%2===0;
-    const seq = down? [...Array(maxDepth+1).keys()].reverse() : [...Array(maxDepth+1).keys()];
-    for(const d of seq){ const L=layers[d]; for(const n of L){ const a1=childX(n), a2=parentX(n); const w1=down?1:2, w2=down?2:1; let s_=0,c_=0; for(const v of a1){s_+=v*w1;c_+=w1;} for(const v of a2){s_+=v*w2;c_+=w2;} n.dx=c_?s_/c_:n.x; } iso(L); } } }
-pack(); for(let i=0;i<10;i++){ sweep(); flipUnits(); }
-for(const L of layers){ for(const n of L) n.dx=n.x; iso(L); } relax(24);
-function heights(){ const rh=new Array(maxDepth+1).fill(0); for(const n of nodes) for(const e of n.els) rh[n.depth]=Math.max(rh[n.depth],e.offsetHeight); return rh; }
-let BOX={};
-function layout(){
-  const rh=heights(); const top=new Array(maxDepth+1); let y=0;
-  const TITLEH=470; y=TITLEH;
-  for(let d=maxDepth; d>=0; d--){ top[d]=y; y+=rh[d]+VCH; }
-  const bottom=y-VCH;
-  let minX=Infinity,maxX=-Infinity;
-  for(const n of nodes){ const w=nodeW(n); minX=Math.min(minX,n.x-w/2); maxX=Math.max(maxX,n.x+w/2); }
-  const MARG=130; const ox=-minX+MARG; const worldW=maxX-minX+2*MARG;
-  for(const n of nodes){ const w=nodeW(n); let left=n.x-w/2+ox; const t=top[n.depth];
-    if(n.type==="unit"){ n.persons.forEach((id,i)=>{ const e=el[id]; e.style.left=left+"px"; e.style.top=t+"px"; left+=pw(id)+G; });
-      (n.infs||[]).forEach((s_,i)=>{ const a_=el[n.persons[i]]; s_.style.left=(parseFloat(a_.style.left)+pw(n.persons[i])+G/2-18)+"px"; s_.style.top=(t+18)+"px"; }); }
-    else { n.els[0].style.left=left+"px"; n.els[0].style.top=t+"px"; } }
-  // lines
-  let paths=[];
-  const dashed=(e)=>{ const c=P[e.c]; if(c&&(c.m==="unv"||c.inh==="unv")) return true; const ps=[e.f,e.m].filter(Boolean); return ps.length&&ps.every(i=>P[i].m==="unv"); };
-  const segs=[];
-  for(const e of edges){ const n=e.pu; let x1,y1;
-    if(n.type!=="unit"){ const d_=n.els[0]; x1=d_.offsetLeft+d_.offsetWidth/2; y1=d_.offsetTop+d_.offsetHeight; }
-    else if(e.f&&e.m){ const a_=el[e.f], b_=el[e.m]; const adj=Math.abs(n.persons.indexOf(e.f)-n.persons.indexOf(e.m))===1;
-      if(adj){ const L_=a_.offsetLeft<b_.offsetLeft?a_:b_, R_=L_===a_?b_:a_; x1=(L_.offsetLeft+L_.offsetWidth+R_.offsetLeft)/2; y1=top[n.depth]+48; } else { x1=(a_.offsetLeft+a_.offsetWidth/2+b_.offsetLeft+b_.offsetWidth/2)/2; y1=top[n.depth]+rh[n.depth]; } }
-    else { const a_=el[e.f||e.m]; x1=a_.offsetLeft+a_.offsetWidth/2; y1=a_.offsetTop+a_.offsetHeight; }
-    const ce=el[e.c]; const x2=ce.offsetLeft+ce.offsetWidth/2, y2=ce.offsetTop; const span=n.depth-e.cu.depth;
-    const cls = e.note? "nt" : (dashed(e)?"dz":((D.linkm||{})[e.c]?"li":"ln"));
-    segs.push({e,x1,y1,x2,y2,span,cls,key:(n.type==="unit"?n.persons.join(","):"note"+edges.indexOf(e))+"@"+Math.round(x1)}); }
-  // tracks: in each gap, every parent-anchor gets its own horizontal track (a "bus"), packed so non-overlapping buses share a track
-  const gapOf=sg=>sg.span<=1? sg.e.cu.depth : sg.e.pu.depth-1;
-  const groups={}; for(const sg of segs){ const g=gapOf(sg)+"|"+sg.key; (groups[g]=groups[g]||{d:gapOf(sg),items:[],lo:Infinity,hi:-Infinity}); const G_=groups[g]; G_.items.push(sg); const xs=sg.span<=1?[sg.x1,sg.x2]:[sg.x1,sg.x1]; G_.lo=Math.min(G_.lo,...xs)-6; G_.hi=Math.max(G_.hi,...xs)+6; }
-  const byGap={}; for(const k in groups){ const G_=groups[k]; (byGap[G_.d]=byGap[G_.d]||[]).push(G_); }
-  for(const d in byGap){ const gs=byGap[d].sort((p_,q_)=>p_.lo-q_.lo); const ends=[]; for(const G_ of gs){ let t=ends.findIndex(x=>x<G_.lo); if(t<0){ t=ends.length; ends.push(G_.hi);} else ends[t]=G_.hi; G_.t=t; } const nt=ends.length;
-    const y0=top[+d]-VCH+14, y1_=top[+d]-14; for(const G_ of gs){ G_.y = nt<=1? (y0+y1_)/2 : y0+(y1_-y0)*G_.t/(nt-1); for(const sg of G_.items) sg.ych=G_.y; } }
-  for(const sg of segs){ const {x1,y1,x2,y2,span,cls}=sg;
-    if(span<=1){ paths.push(`<path class="${cls}" d="M${x1},${y1} V${sg.ych} H${x2} V${y2}"/>`); }
-    else { const yb=sg.ych; const ych=top[sg.e.cu.depth]-VCH/2; paths.push(`<path class="${cls} lg" d="M${x1},${y1} V${yb} C${x1},${(yb+ych)/2} ${x2},${(yb+ych)/2} ${x2},${ych} V${y2}"/>`); } }
-  // generation labels
-  const gl=[]; for(let d=0; d<=maxDepth; d++){ const yy=top[d]+Math.min(rh[d],150)/2-30;
-    const lab = d===0? `<b>★</b><i>אלטר</i>` : `<b>${HEB[d]||d}</b><i>דור ${d}${GENW[d]?" · "+GENW[d]:""}</i>`;
-    gl.push(`<div class="gen" style="left:20px;top:${yy}px">${lab}</div><div class="gen" style="left:${worldW-106}px;top:${yy}px">${lab}</div>`);
-    if(d<maxDepth) gl.push(`<div class="genrule" style="left:110px;width:${worldW-220}px;top:${top[d]-VCH/2}px"></div>`); }
-  let extra=document.getElementById("extra"); if(!extra){ extra=document.createElement("div"); extra.id="extra"; world.appendChild(extra); }
-  const rootX=rootN.x+ox;
-  const unplaced=(D.unplaced||[]).length? `<div class="box" style="left:${rootX+300}px;top:${top[0]-10}px"><h3>נאך נישט אריינגעשטעלט אינעם באום</h3><ul>${D.unplaced.map(u=>`<li>${esc(u.n)}</li>`).join("")}</ul></div>`:"";
-  extra.innerHTML=`<div id="title" style="left:${worldW/2-900}px;width:1800px;top:40px"><div class="orn">❦</div><h1>יחוס משפחת לייטנער</h1><div class="s1">פון ר' אלטר יעקב יצחק לייטנער נ"י – ${maxDepth} דורות ארויף</div><div class="s2">לייטנער · מאיר · וואגשאהל · שפירא · רובין · מייזליש · טייטלבוים · האלבערשטאם</div></div>`+
-    gl.join("")+
-    `<div class="box" style="left:${rootX-860}px;top:${top[0]-10}px"><h3>וואס איז נאך אפן</h3><ul>${(D.open||[]).map(o=>`<li>${esc(o)}</li>`).join("")}</ul></div>`+unplaced;
-  const worldH=bottom+60;
-  svg.setAttribute("width",worldW); svg.setAttribute("height",worldH); svg.setAttribute("viewBox",`0 0 ${worldW} ${worldH}`);
-  svg.innerHTML=`<style>.lg{stroke-opacity:.75;stroke-width:1.4}.ln{fill:none;stroke:#a4814e;stroke-width:1.7}.dz{fill:none;stroke:#b0563f;stroke-width:1.6;stroke-dasharray:7 5}.nt{fill:none;stroke:#b8a07a;stroke-width:1.2;stroke-dasharray:3 4}.li{fill:none;stroke:#c08a2b;stroke-width:2;stroke-dasharray:10 4 2 4}</style>`+paths.join("");
-  world.style.width=worldW+"px"; world.style.height=worldH+"px";
-  BOX={w:worldW,h:worldH};
-}
-// ---------- pan / zoom ----------
-let s=1,tx=0,ty=0; const apply=()=>{world.style.transform=`translate(${tx}px,${ty}px) scale(${s})`;};
-const clampS=v=>Math.max(0.03,Math.min(2.6,v));
-function zoomAt(cx,cy,f){ const ns=clampS(s*f); const wx=(cx-tx)/s, wy=(cy-ty)/s; s=ns; tx=cx-wx*s; ty=cy-wy*s; apply(); }
-let anim=null;
-function animTo(ns,ntx,nty,ms=550){ cancelAnimationFrame(anim); const s0=s,x0=tx,y0=ty,t0=performance.now();
-  const step=t=>{ let k=Math.min(1,(t-t0)/ms); k=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2; s=s0+(ns-s0)*k; tx=x0+(ntx-x0)*k; ty=y0+(nty-y0)*k; apply(); if(k<1) anim=requestAnimationFrame(step); }; anim=requestAnimationFrame(step); }
-const barH=()=>document.getElementById("bar").offsetHeight;
-function fit(instant){ const vw=innerWidth, vh=innerHeight-barH(); const ns=Math.min(vw/BOX.w, vh/BOX.h)*0.97;
-  const ntx=(vw-BOX.w*ns)/2, nty=barH()+(vh-BOX.h*ns)/2; if(instant){s=ns;tx=ntx;ty=nty;apply();} else animTo(ns,ntx,nty); }
-function focusEl(e,ns){ if(!e) return; ns=ns||Math.max(s,innerWidth<760?0.85:1); const cx=e.offsetLeft+e.offsetWidth/2, cy=e.offsetTop+e.offsetHeight/2;
-  const vw=innerWidth, vh=innerHeight; const py = innerWidth<760 && !document.getElementById("panel").hidden ? (barH()+(vh*0.28-barH())/2+40) : (barH()+(vh-barH())/2);
-  const px = innerWidth>=760 && !document.getElementById("panel").hidden ? (vw-440)/2 : vw/2;
-  animTo(ns, px-cx*ns, py-cy*ns); }
-const ptrs=new Map(); let st=null, pinch=null;
-vp.addEventListener("pointerdown",e=>{ vp.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  cancelAnimationFrame(anim);
-  if(ptrs.size===1){ st={x:e.clientX,y:e.clientY,tx,ty,t:performance.now(),moved:false,target:e.target}; }
-  else if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y),mx:(a.x+b.x)/2,my:(a.y+b.y)/2,s,tx,ty}; if(st) st.moved=true; } });
-vp.addEventListener("pointermove",e=>{ if(!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(ptrs.size===1&&st){ const dx=e.clientX-st.x, dy=e.clientY-st.y; if(Math.abs(dx)+Math.abs(dy)>7){ st.moved=true; vp.classList.add("drag"); } if(st.moved){ tx=st.tx+dx; ty=st.ty+dy; apply(); } }
-  else if(ptrs.size===2&&pinch){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-    const ns=clampS(pinch.s*d/pinch.d); const wx=(pinch.mx-pinch.tx)/pinch.s, wy=(pinch.my-pinch.ty)/pinch.s; s=ns; tx=mx-wx*s; ty=my-wy*s; apply(); } });
-function up(e){ if(!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); vp.classList.remove("drag");
-  if(ptrs.size===0){ if(st&&!st.moved&&performance.now()-st.t<700) tap(st.target); st=null; pinch=null; }
-  else if(ptrs.size===1){ const [a]=[...ptrs.values()]; st={x:a.x,y:a.y,tx,ty,t:0,moved:true}; pinch=null; } }
-vp.addEventListener("pointerup",up); vp.addEventListener("pointercancel",up);
-vp.addEventListener("wheel",e=>{ e.preventDefault(); cancelAnimationFrame(anim); const k=e.ctrlKey?0.012:0.0016; zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*k)); },{passive:false});
-document.getElementById("bFit").onclick=()=>fit();
-document.getElementById("bIn").onclick=()=>zoomAt(innerWidth/2,innerHeight/2,1.5);
-document.getElementById("bOut").onclick=()=>zoomAt(innerWidth/2,innerHeight/2,1/1.5);
-window.__yx={openPanel:(i)=>openPanel(i),focus:(i,z)=>focusEl(el[i],z)};
-document.getElementById("bAlter").onclick=()=>focusEl(el[D.root],innerWidth<760?0.7:1);
-// ---------- panel ----------
-let sel=null;
-function tap(t){ const c=t.closest&&t.closest(".p"); if(c){ openPanel(c.dataset.id); return; }
-  const ch=t.closest&&t.closest(".chip.ref"); if(ch&&ch.onclickTarget){ const tg=ch.onclickTarget; const e=tg.els[tg.els.length-1]; focusEl(e,Math.max(s,0.8)); flash(tg.els); return; }
-  closePanel(); }
-function flash(els){ els.forEach(e=>{e.classList.add("sel"); setTimeout(()=>e.classList.remove("sel"),1800);}); }
-const nameLink=id=>`<a data-go="${esc(id)}">${esc(P[id].n)}</a>`;
-function openPanel(id){ const p=P[id]; if(!p) return; if(sel) el[sel]&&el[sel].classList.remove("sel"); sel=id; el[id]&&el[id].classList.add("sel");
-  const m=p.m||"inf"; const u=UP[id]||[]; const kids=(childrenOf[id]||[]).filter(c=>P[c]);
-  let h=`<div class="hd" style="--bc:${col(p.br)}"><h2>${esc(p.n)}</h2>${p.t?`<div class="ti">${esc(p.t)}</div>`:""}<div class="badge"><span class="mk ${m}" style="background:${m==="ok"?"#5b7a3a":m==="alt"?"#2f6b55":m==="inf"?"#c08a2b":"#a33"}">${MK[m][0]}</span>${esc(MK[m][1])}</div></div>`;
-  h+=`<dl>`; if(p.pl) h+=`<dt>ארט</dt><dd>${esc(p.pl)}</dd>`; if(p.d) h+=`<dt>דאטעס</dt><dd>${esc(p.d)}</dd>`; if(p.s) h+=`<dt>ספרים</dt><dd>${esc(p.s)}</dd>`;
-  h+=`<dt>משפחה</dt><dd>${esc((BR[p.br]||BR.L)[0])}</dd>`;
-  if(u[0]&&P[u[0]]) h+=`<dt>טאטע</dt><dd class="rel">${nameLink(u[0])}</dd>`; if(u[1]&&P[u[1]]) h+=`<dt>מאמע</dt><dd class="rel">${nameLink(u[1])}</dd>`; if(p.inh) h+=`<dt>⚠</dt><dd style="font-size:14px;color:#8a3a12">${p.inh==="unv"?"דער גאנצער צווייג איבער דעם שטייט אויף א '?' שורה ווייטער אונטן: ":"דער צווייג איבער דעם שטייט אויף א '≈' (אפגעלערנטע) שורה ווייטער אונטן: "}${esc(p.inhw||"")}</dd>`; const lm=(D.linkm||{})[id]; if(lm) h+=`<dt>≈</dt><dd style="font-size:14px;color:#8a5a12">${esc(lm[1])}</dd>`;
-  const sp=[]; for(const c of kids){ const cu=UP[c]; const o=cu[0]===id?cu[1]:cu[0]; if(o&&P[o]&&!sp.includes(o)) sp.push(o);} if(sp.length) h+=`<dt>∞</dt><dd class="rel">${sp.map(nameLink).join(" · ")}</dd>`;
-  if(kids.length) h+=`<dt>קינד</dt><dd class="rel">${kids.map(nameLink).join(" · ")}</dd>`; if(p.sibof&&P[p.sibof]){ const an=P[p.sibof]; const par=(UP[p.sibof]||[]).filter(q=>q&&P[q]); h+=`<dt>געשוויסטער</dt><dd class="rel">${nameLink(p.sibof)}${(p.sibs||[]).length?"":""}</dd>`; if(par.length) h+=`<dt>עלטערן</dt><dd class="rel">${par.map(nameLink).join(" · ")}</dd>`; const os=(an.sibs||[]).filter(s=>s!==id&&P[s]); if(os.length) h+=`<dt>נאך געשוויסטער</dt><dd class="rel" style="font-size:14px">${os.map(nameLink).join(" · ")}</dd>`; }
-  if((p.sibs||[]).length) h+=`<dt>געשוויסטער</dt><dd class="rel" style="font-size:14px">${p.sibs.filter(s=>P[s]).map(nameLink).join(" · ")}</dd>`;
-  h+=`</dl>`;
-  if(p.x) h+=`<div class="x">${esc(p.x)}</div>`;
-  if(p.src) h+=`<div class="src"><b>מקור</b>${esc(p.src)}</div>`;
-  if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)} ↗</a>`).join("")+`</div>`;
-  const med=p.media||[]; if(med.length) h+=`<div class="gal">`+med.map((x,i)=>`<figure data-i="${i}"><img loading="lazy" src="${esc(x.f)}" alt=""><figcaption>${esc(x.cap)}</figcaption></figure>`).join("")+`</div>`;
-  const pb=document.getElementById("pB"); pb.innerHTML=h; const pn=document.getElementById("panel"); pn.hidden=false; pn.scrollTop=0;
-  pb.querySelectorAll("[data-go]").forEach(a=>a.onclick=()=>{ const t=a.dataset.go; openPanel(t); focusEl(el[t]); });
-  pb.querySelectorAll(".gal figure").forEach(f=>f.onclick=()=>openLB(id,+f.dataset.i));
-  focusEl(el[id]); }
-function closePanel(){ document.getElementById("panel").hidden=true; if(sel&&el[sel]) el[sel].classList.remove("sel"); sel=null; }
-document.getElementById("pX").onclick=closePanel;
-// ---------- lightbox ----------
-let lbId=null, lbI=0;
-function openLB(id,i){ lbId=id; lbI=i; const m=P[id].media[i]; const lb=document.getElementById("lb");
-  document.getElementById("lbI").src=m.f; document.getElementById("lbC").innerHTML=`${esc(m.cap)}<br><small>${esc(m.cr||"")}${m.u?` · <a href="${esc(m.u)}" target="_blank" rel="noopener">מקור ↗</a>`:""}</small>`;
-  const n=P[id].media.length; document.getElementById("lbP").style.display=n>1?"":"none"; document.getElementById("lbN").style.display=n>1?"":"none"; lb.hidden=false; }
-document.getElementById("lbX").onclick=()=>document.getElementById("lb").hidden=true;
-document.getElementById("lb").addEventListener("click",e=>{ if(e.target.id==="lb") e.currentTarget.hidden=true; });
-document.getElementById("lbN").onclick=()=>{const n=P[lbId].media.length; openLB(lbId,(lbI+1)%n);};
-document.getElementById("lbP").onclick=()=>{const n=P[lbId].media.length; openLB(lbId,(lbI-1+n)%n);};
-addEventListener("keydown",e=>{ if(e.key==="Escape"){ document.getElementById("lb").hidden=true; closePanel(); document.getElementById("search").hidden=true; } });
-// ---------- search ----------
-const norm=t=>String(t||"").replace(/[\u0591-\u05C7"'״׳()\-–·,.]/g,"").replace(/\s+/g," ").trim();
-document.getElementById("bSearch").onclick=()=>{ const s_=document.getElementById("search"); s_.hidden=!s_.hidden; if(!s_.hidden) document.getElementById("q").focus(); };
-document.getElementById("q").addEventListener("input",e=>{ const q=norm(e.target.value); const res=document.getElementById("res"); if(q.length<2){res.innerHTML="";return;}
-  const hits=Object.keys(P).filter(id=>el[id]&&norm([P[id].n,P[id].t,P[id].pl,P[id].s].join(" ")).includes(q)).slice(0,12);
-  res.innerHTML=hits.map(id=>`<div data-id="${esc(id)}">${esc(P[id].n)}${P[id].t?` – <small>${esc(P[id].t)}</small>`:""}</div>`).join("")||"<div>נישט געטראפן</div>";
-  res.querySelectorAll("[data-id]").forEach(d=>d.onclick=()=>{ document.getElementById("search").hidden=true; openPanel(d.dataset.id); }); });
-// ---------- legend ----------
-const lg=document.getElementById("legend");
-document.getElementById("lgB").innerHTML=`<div style="margin-bottom:4px">אלטר איז אונטן; יעדער שורה ארויף איז א דור העכער. ביי א פארפאלק: דער מאן רעכטס, ∞ די ווייב לינקס; די עלטערן פון יעדן שטייען גלייך איבער אים/איר.</div>`+
-  Object.entries(BR).map(([k,v])=>`<div class="lgr"><i style="background:${col(k)}"></i>${esc(v[0])}</div>`).join("")+
-  `<div style="margin-top:6px"></div>`+Object.entries(MK).map(([k,v])=>`<div class="lgr"><span class="mk ${k}" style="background:${k==="ok"?"#5b7a3a":k==="alt"?"#2f6b55":k==="inf"?"#c08a2b":"#a33"}">${v[0]}</span>${esc(v[1])}</div>`).join("")+
-  `<div class="lgr"><svg width="26" height="6"><path d="M0,3 H26" stroke="#b0563f" stroke-width="2" stroke-dasharray="6 4"/></svg>א פארבינדונג וואס איז נאך נישט באשטעטיגט</div><div class="lgr"><svg width="26" height="6"><path d="M0,3 H26" stroke="#c08a2b" stroke-width="2" stroke-dasharray="8 3 2 3"/></svg>א פארבינדונג וואס איז אָפּגעלערנט (≈)</div><div class="lgr" style="margin-top:4px">טאפ אויף א נאמען: מקור, לינקס, בילדער פון ספרים, צייטונגען און מצבות.</div>`;
-document.getElementById("lgT").onclick=()=>lg.classList.toggle("open");
-// ---------- go ----------
-function start(){ layout(); fit(true); if(innerWidth<760) setTimeout(()=>{ const r=el[D.root]; const ns=0.42; const cx=r.offsetLeft+r.offsetWidth/2, cy=r.offsetTop+r.offsetHeight; animTo(ns, innerWidth/2-cx*ns, innerHeight-150-cy*ns, 1100); },1500); setTimeout(()=>{const h=document.getElementById("hint"); h.style.opacity=0;},7000); }
-if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{ start(); }); else addEventListener("load",start);
-let rt; addEventListener("resize",()=>{clearTimeout(rt); rt=setTimeout(()=>fit(true),200);});
-window.__yc={fit,openPanel,focusEl,el,nodes,get state(){return {s,tx,ty,BOX};}};
-})();
-
-
-/* מסורה section (Nov 8): chains above the tree, every link with its mark; tradition, clearly labeled */
-(function(){
-  var M=(window.YDATA||{}).masorah; if(!M||!M.chains) return;
-  var bar=document.querySelector('#bar .btns'); if(!bar) return;
-  var b=document.createElement('button'); b.id='bMas'; b.className='wide'; b.title='מסורה'; b.textContent='📜 מסורה'; bar.appendChild(b);
-  function e(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function mk(m){m=String(m||''); var c=m.indexOf('✓')>=0?'ok':(m.indexOf('≈')>=0?'inf':'unv'); var t=m.indexOf('✓')>=0?'✓':(m.indexOf('≈')>=0?'≈':'❓'); return '<span class="mk '+c+'">'+t+'</span>';}
-  function render(){
-    var h='<div class="hd"><b>'+e(M.meta&&M.meta.title||'מסורה')+'</b></div>';
-    h+='<p class="note">דאס איז <b>מסורה</b> – אלטע יחוס-קייטן ווי זיי ווערן איבערגעגעבן. נישט אלעס איז באוויזן; יעדער לינק האט זיין צייכן און מקור. דורות וואס פעלן ווערן געוויזן ווי א לאך.</p>';
-    var L=(M.meta&&M.meta.legend)||{}; h+='<p class="note">'+Object.keys(L).map(function(k){return (k==='gap'?'<b>…</b>':mk(k))+' '+e(L[k]);}).join(' · ')+'</p>';
-    M.chains.forEach(function(c){
-      h+='<details class="mas"><summary><b>'+e(c.name)+'</b></summary>';
-      if(c.site_path&&c.site_path.length) h+='<p class="note">אויפן באום: '+c.site_path.map(function(s){return e(s.n)+' '+mk(s.mark);}).join(' ← ')+'</p>';
-      if(c.join) h+='<p class="note">גייט ווייטער מיט: '+e(c.join.chain||'')+' '+e(c.join.at||'')+'</p>';
-      (c.nodes||[]).forEach(function(n){
-        if(n.gap){h+='<div class="src" style="text-align:center">— '+e(n.gap===true?'דורות חסרים':n.gap)+' —</div>'; if(!n.n) return;}
-        h+='<div class="src">'+mk(n.mark)+' <b>'+e(n.n)+'</b>'+(n.t?' – '+e(n.t):'');
-        if(n.quote) h+='<br>'+e(n.quote);
-        if(n.src) h+='<br><small>'+(n.url?'<a href="'+e(n.url)+'" target="_blank" rel="noopener">'+e(n.src)+'</a>':e(n.src))+'</small>';
-        if(n.parent_note) h+='<br><small>'+e(n.parent_note)+'</small>';
-        if(n.note) h+='<br><small>'+e(n.note)+'</small>';
-        h+='</div>';
-      });
-      h+='</details>';
-    });
-    if(M.meta&&M.meta.notes&&M.meta.notes.length) h+='<details class="mas"><summary>באמערקונגען</summary>'+M.meta.notes.map(function(x){return '<p class="note">'+e(x)+'</p>';}).join('')+'</details>';
-    return h;
-  }
-  b.addEventListener('click',function(){var p=document.getElementById('panel'),pb=document.getElementById('pB'); if(!p||!pb) return; pb.innerHTML=render(); p.hidden=false; pb.scrollTop=0;});
-})();
+/* ---------- layout: tidy ancestor tree with contours (root at bottom) ---------- */
+const N={}; // id -> {x,y,dep,ch(child in spanning tree),sib:[]}
+const kids={}; for(const c in UP){ for(const p of UP[c]||[]) if(p&&P[p]) (kids[p]=kids[p]||[]).push(c); }
+const sibsOf={}; for(const id in P){ const a=P[id].sibof; if(a&&P[a]) (sibsOf[a]=sibsOf[a]||[]).push(id); }
+const tparents={}; const extra=[]; // extra = cross links (pedigree collapse)
+(function span(){ const seen=new Set([ROOT]); let q=[ROOT]; N[ROOT]={dep:0};
+  while(q.length){ const nq=[]; for(const id of q){ const u=UP[id]||[]; tparents[id]=[];
+      for(let k=0;k<2;k++){ const p=u[k]; if(!p||!P[p]) continue; if(seen.has(p)){ extra.push([id,p]); continue; } seen.add(p); N[p]={dep:N[id].dep+1,ch:id}; tparents[id].push(p); nq.push(p);} }
+    q=nq; } })();
+// layered layout (Nov 8 redesign): each generation is one row; parents sit over their child, rows packed tight with
+// isotonic regression (pool-adjacent-violators) so nothing overlaps and nothing drifts further than it must.
+const PITCH=W+GX;
+function packRow(items){ // items: [{id,t}] sorted by t -> x
+  const n=items.length; const blk=[]; // blocks of {sum,cnt,start}
+  for(let i=0;i<n;i++){ let b={sum:items[i].t-i*PITCH,cnt:1,start:i}; blk.push(b);
+    while(blk.length>1){ const a=blk[blk.length-2], c=blk[blk.length-1]; if(a.sum/a.cnt<=c.sum/c.cnt) break; a.sum+=c.sum; a.cnt+=c.cnt; blk.pop(); } }
+  for(const b of blk){ const q=b.sum/b.cnt; for(let k=b.start;k<b.start+b.cnt;k++) N[items[k].id].x=q+k*PITCH; } }
+(function layered(){ N[ROOT].x=0; N[ROOT].y=0; let row=[ROOT]; let d=0;
+  while(row.length){ const items=[]; let seq=0;
+    for(const id of row){ const n=N[id]; const ps=tparents[id]||[]; const u=UP[id]||[]; n.po=ps.map(p=>[p,0]);
+      const fa=ps.includes(u[0])?u[0]:null, mo=ps.includes(u[1])?u[1]:null; const two=fa&&mo;
+      const add=(p,t,side)=>{ items.push({id:p,t,seq:seq++}); (sibsOf[p]||[]).forEach((sb,k)=>{ N[sb]={dep:d+1,sibof:p}; items.push({id:sb,t:t+side*(k+1)*PITCH,seq:seq++}); }); };
+      if(mo) add(mo,two?n.x-PITCH/2:n.x,-1); if(fa) add(fa,two?n.x+PITCH/2:n.x,1); }
+    items.sort((a,b)=>a.t-b.t||a.seq-b.seq); packRow(items); d++;
+    for(const it of items){ N[it.id].y=-d*RH; N[it.id].dep=d; }
+    row=items.filter(it=>!N[it.id].sibof).map(it=>it.id); } })();
+for(const a in sibsOf){ if(N[a]&&N[a].dep===0) sibsOf[a].forEach((sb,k)=>{ N[sb]={x:N[a].x-(k+1)*PITCH,y:0,dep:0,sibof:a}; }); }
+const ids=Object.keys(N); const rows={}; let maxDep=0;
+for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(n.dep>maxDep) maxDep=n.dep; }
+for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
+let minX=1e9,maxX=-1e9; for(const id of ids){ minX=Math.min(minX,N[id].x-W/2); maxX=Math.max(maxX,N[id].x+W/2); }
+/* ---------- text prep (wrapped once, world units) ---------- */
+const FN='700 16.5px FRL, "Frank Ruhl Libre", serif', FD='400 12.5px FRL, "Frank Ruhl Libre", serif', FT='italic 400 12.5px FRL, "Frank Ruhl Libre", serif';
+function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
+  for(const x of w){ const tr=cur?cur+" "+x:x; if(cx.measureText(tr).width<=maxw) cur=tr; else { if(cur) out.push(cur); cur=x; if(out.length===maxl) break; } }
+  if(out.length<maxl&&cur) out.push(cur); if(out.length>maxl) out.length=maxl;
+  if(out.length===maxl&&w.join(" ").length>out.join(" ").length+1){ let s=out[maxl-1]; while(s.length>1&&cx.measureText(s+"…").width>maxw) s=s.slice(0,-1); out[maxl-1]=s+"…"; }
+  return out; }
+const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id); const tw=por?W-103:W-39;  // keeps text clear of the mark circle and the portrait
+  const fit=t=>{ cx.font=FD; if(cx.measureText(t).width<=tw-14) return t; let q=t; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
+  const fitT=t=>{ cx.font=FT; let q=t; if(cx.measureText(q).width<=tw-14) return q; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
+  const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl);
+  return TX[id]={nm:wrap(p.n,FN,tw-6,2),dt:p.d?fit(p.d):"",ti:tl?fitT(tl):"",rab,dtl:1e9,dtc:fit,por}; }
+function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m.k||"x")[0],cap:m.cap,cr:m.cr,u:m.u}));
+  return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
+function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
+const isURI=f=>/^data:|\//.test(f)&&!/^[mtz]\//.test(f);
+const SRC=(f,tier)=>f.startsWith("data:")?f:/^[mtz]\//.test(f)?tier+f.slice(1):f.includes("/")?f:tier+"/"+f+".jpg";
+/* ---------- view state ---------- */
+let s=0.9,tx=0,ty=0,dpr=Math.min(2,window.devicePixelRatio||1),vw=0,vh=0,dirty=true,sel=null;
+function resize(){ vw=innerWidth; vh=innerHeight; cv.width=Math.round(vw*dpr); cv.height=Math.round(vh*dpr); dirty=true; }
+addEventListener("resize",resize); resize();
+const clampS=v=>Math.max(0.025,Math.min(3,v));
+function req(){ dirty=true; }
+/* ---------- images on cards ---------- */
+const IMG={}; function img(src){ let o=IMG[src]; if(o) return o.ok?o.im:null; o=IMG[src]={im:new Image(),ok:false}; o.im.decoding="async"; o.im.onload=()=>{o.ok=true;req();}; o.im.src=src; return null; }
+/* ---------- draw ---------- */
+function rr(x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
+function markAt(x,y,m,r){ const k=MKC[m]||MKC.unv; cx.beginPath(); cx.arc(x,y,r,0,7); cx.fillStyle=k[0]; cx.fill();
+  cx.fillStyle="#fff"; cx.font='700 '+(r*1.25)+'px system-ui, Roboto, sans-serif'; cx.textAlign="center"; cx.textBaseline="middle"; cx.fillText(k[1],x,y+0.5); }
+function crest(x,y,r){ cx.beginPath(); cx.moveTo(x,y-r); cx.lineTo(x+r*0.75,y); cx.lineTo(x,y+r); cx.lineTo(x-r*0.75,y); cx.closePath(); cx.fillStyle=C.gold; cx.fill(); }
+function draw(){
+  dirty=false; cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,vw,vh);
+  const x0=(-tx)/s, x1=(vw-tx)/s, y0=(-ty)/s, y1=(vh-ty)/s;
+  const d0=Math.max(0,Math.floor(-y1/RH)-1), d1=Math.min(maxDep,Math.ceil(-y0/RH)+1);
+  // gentle generation bands (screen space) + generation numbers
+  cx.font='500 11px FRL, serif'; cx.textAlign="right"; cx.textBaseline="middle";
+  const step=s<0.08?10:s<0.2?5:1;
+  for(let d=d0;d<=d1;d++){ const top=(-d*RH-(RH-H)/2)*s+ty, bot=top+RH*s; if(bot<0||top>vh) continue;
+    if(d%2===1){ cx.fillStyle="rgba(150,110,50,.055)"; cx.fillRect(0,top,vw,RH*s); }
+    if(d%step===0&&d>0&&s>0.05){ cx.fillStyle="rgba(110,80,35,.55)"; cx.fillText("דור "+d,vw-8,top+11); } }
+  cx.setTransform(dpr*s,0,0,dpr*s,dpr*tx,dpr*ty);
+  // curved connectors in the parent's family colour
+  const lw=Math.max(1.5,1/s); cx.lineWidth=lw; cx.globalAlpha=s<0.1?0.5:0.7;
+  for(let d=Math.max(0,d0-1);d<=d1;d++){ const row=rows[d]; if(!row) continue;
+    for(const id of row){ const n=N[id]; if(!n.po||!n.po.length) continue;
+      for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue;
+        const ya=n.y, yb=q.y+H, ym=(ya+yb)/2; cx.strokeStyle=bc(p); cx.beginPath(); cx.moveTo(n.x,ya); cx.bezierCurveTo(n.x,ym,q.x,ym,q.x,yb); cx.stroke(); } } }
+  cx.globalAlpha=1;
+  if(s>0.12){ cx.strokeStyle=C.lineX; cx.lineWidth=Math.max(1.2,1/s); cx.setLineDash([7,5]); cx.beginPath();
+    for(const [c,p] of extra){ const a=N[c],b=N[p]; if(!a||!b) continue; if(Math.max(a.x,b.x)<x0||Math.min(a.x,b.x)>x1||Math.max(a.y,b.y)<y0-H||Math.min(a.y,b.y)>y1) continue;
+      cx.moveTo(a.x,a.y); cx.bezierCurveTo(a.x,a.y-RH*.6,b.x,b.y+H+RH*.4,b.x,b.y+H); }
+    cx.stroke(); cx.setLineDash([]); }
+  const lod=s*W; let drawn=0;
+  for(let d=d0;d<=d1;d++){ const row=rows[d]; if(!row) continue;
+    let lo=0,hi=row.length; while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2<x0) lo=m+1; else hi=m; }
+    for(let i=lo;i<row.length;i++){ const id=row[i], n=N[id]; if(n.x-W/2>x1) break; drawn++; card(id,n,lod); } }
+  return drawn; }
+function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.mes, root=id===ROOT, col=bc(id);
+  if(lod<34){ cx.fillStyle=C.card; cx.fillRect(x,y,W,H); cx.fillStyle=col; cx.fillRect(x,y,W,14); if(id===sel){cx.strokeStyle=C.sel;cx.lineWidth=3/s;cx.strokeRect(x,y,W,H);} return; }
+  cx.fillStyle="rgba(80,55,20,.10)"; rr(x+1,y+3,W,H,10); cx.fill();   // soft shadow (no blur)
+  rr(x,y,W,H,10); cx.fillStyle=mes?C.cardMes:root?"#fffdf5":C.card; cx.fill();
+  cx.lineWidth=Math.max(1,0.9/s); cx.strokeStyle=id===sel?C.sel:root?C.gold:C.edge; if(mes) cx.setLineDash([5,4]); cx.stroke(); cx.setLineDash([]);
+  if(id===sel||root){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
+  // family-colour top edge
+  cx.save(); rr(x,y,W,H,10); cx.clip(); cx.fillStyle=col; cx.fillRect(x,y,W,root?7:5); cx.restore();
+  if(lod<75){ cx.fillStyle=C.ink; cx.font='700 34px FRL, serif'; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; const t=txt(id).nm[0]||""; cx.fillText(t.length>11?t.slice(0,11)+"…":t,n.x,y+H/2+3); cx.direction="ltr"; markAt(x+16,y+20,m,10); return; }
+  const T=txt(id); let rx=x+W-13;
+  if(T.por){ const R=27, pcx=x+W-13-R, pcy=y+14+R+4;
+    if(lod>105){ const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
+      if(im){ const r=Math.max(2*R/im.width,2*R/im.height); cx.drawImage(im,pcx-im.width*r/2,pcy-R-(im.height*r-2*R)*0.2,im.width*r,im.height*r); } else { cx.fillStyle="#efe5cf"; cx.fill(); }
+      cx.restore(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.lineWidth=Math.max(1.2,1/s); cx.strokeStyle=col; cx.stroke(); }
+    rx=x+W-13-2*R-10; }
+  cx.direction="rtl"; cx.textAlign="right"; cx.textBaseline="alphabetic";
+  let yy=y+28; if(T.rab&&!mes){ crest(rx-4,yy-6,4.2); }
+  cx.fillStyle=C.ink; cx.font=FN; const off=T.rab&&!mes?12:0;
+  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=20; });
+  if(mes){ cx.font='600 11.5px FRL, serif'; cx.fillStyle=C.gold; cx.fillText("לויט מסורה",rx,yy+1); yy+=17; }
+  else if(T.ti){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; cx.fillText(T.ti,rx,yy+1); yy+=17; }
+  if(T.dt){ cx.font=FD; cx.fillStyle=C.date; cx.fillText(T.dt,rx,Math.min(yy+2,y+H-10)); }
+  cx.direction="ltr";
+  markAt(x+18,y+21,m,10.5); }
+let raf=0; function loop(){ raf=requestAnimationFrame(loop); if(inertia()) dirty=true; if(dirty) draw(); }
+/* ---------- gestures: pan with inertia, pinch, wheel, tap, double-tap ---------- */
+const ptr=new Map(); let vx=0,vy=0,lastT=0,moved=0,pinch=null,downAt=0,lastTap=0,anim=null;
+function inertia(){ if(anim) return anim(); if(ptr.size||(Math.abs(vx)<0.02&&Math.abs(vy)<0.02)) return false; const now=performance.now(), dt=Math.min(40,now-lastT); lastT=now; tx+=vx*dt; ty+=vy*dt; const f=Math.pow(0.94,dt/16); vx*=f; vy*=f; return true; }
+cv.addEventListener("pointerdown",e=>{ cv.setPointerCapture(e.pointerId); ptr.set(e.pointerId,{x:e.clientX,y:e.clientY}); vx=vy=0; anim=null; moved=0; downAt=performance.now(); lastT=downAt;
+  if(ptr.size===2){ const [a,b]=[...ptr.values()]; pinch={d:Math.hypot(a.x-b.x,a.y-b.y),mx:(a.x+b.x)/2,my:(a.y+b.y)/2,s0:s}; } },{passive:true});
+cv.addEventListener("pointermove",e=>{ const o=ptr.get(e.pointerId); if(!o) return; const nx=e.clientX, ny=e.clientY;
+  if(ptr.size===1){ const dx=nx-o.x, dy=ny-o.y; tx+=dx; ty+=dy; moved+=Math.abs(dx)+Math.abs(dy); const now=performance.now(), dt=Math.max(1,now-lastT); vx=0.8*dx/dt+0.2*vx; vy=0.8*dy/dt+0.2*vy; lastT=now; }
+  o.x=nx; o.y=ny;
+  if(ptr.size===2&&pinch){ const [a,b]=[...ptr.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    const ns=clampS(pinch.s0*d/pinch.d); const wx=(pinch.mx-tx)/s, wy=(pinch.my-ty)/s; s=ns; tx=mx-wx*s; ty=my-wy*s; pinch.mx=mx; pinch.my=my; moved+=99; }
+  dirty=true; },{passive:true});
+function up(e){ const had=ptr.has(e.pointerId); ptr.delete(e.pointerId); if(ptr.size<2) pinch=null; if(ptr.size===1){ vx=vy=0; }
+  if(!had||ptr.size) return; const now=performance.now(); if(now-lastT>60){ vx=vy=0; } lastT=now;
+  if(moved<10&&now-downAt<500){ vx=vy=0; const id=hit(e.clientX,e.clientY);
+    if(id){ openSheet(id); } else if(now-lastTap<320){ zoomTo(e.clientX,e.clientY,Math.min(3,s*2.2)); } lastTap=now; } }
+cv.addEventListener("pointerup",up,{passive:true}); cv.addEventListener("pointercancel",up,{passive:true});
+cv.addEventListener("wheel",e=>{ e.preventDefault(); const f=Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0018)); const ns=clampS(s*f); const wx=(e.clientX-tx)/s, wy=(e.clientY-ty)/s; s=ns; tx=e.clientX-wx*s; ty=e.clientY-wy*s; dirty=true; },{passive:false});
+function hit(sx,sy){ const wx=(sx-tx)/s, wy=(sy-ty)/s; const d=Math.round(-(wy-H/2)/RH); const row=rows[d]; if(!row) return null; if(wy<-d*RH-6||wy>-d*RH+H+6) return null;
+  for(const id of row){ const n=N[id]; if(wx>=n.x-W/2-4&&wx<=n.x+W/2+4) return id; } return null; }
+function animTo(ns,ntx,nty,ms){ const s0=s,x0=tx,y0=ty,t0=performance.now(); vx=vy=0;
+  anim=()=>{ let k=Math.min(1,(performance.now()-t0)/ms); k=1-Math.pow(1-k,3); s=s0+(ns-s0)*k; tx=x0+(ntx-x0)*k; ty=y0+(nty-y0)*k; if(k>=1) anim=null; return true; }; }
+function zoomTo(sx,sy,ns){ const wx=(sx-tx)/s, wy=(sy-ty)/s; animTo(ns,sx-wx*ns,sy-wy*ns,380); }
+function focus(id,ns){ const n=N[id]; if(!n) return; ns=ns||Math.max(s,0.75); const sheetUp=document.getElementById("sheet").classList.contains("on")&&vw<820;
+  animTo(ns,vw/2-n.x*ns,(sheetUp?vh*0.2:vh*0.55)-(n.y+H/2)*ns,600); }
+function home(){ const n=N[ROOT]; const ns=Math.min(1,vw/(2*PITCH+30)); s=ns; tx=vw/2-n.x*s; ty=vh*0.78-(n.y+H/2)*s; dirty=true; }
+document.getElementById("home").onclick=()=>{ const n=N[ROOT]; const ns=Math.min(1,vw/(2*PITCH+30)); animTo(ns,vw/2-n.x*ns,vh*0.78-(n.y+H/2)*ns,650); };
+/* ---------- detail sheet ---------- */
+const DET={}; const nch=D.nch||32;
+function bucket(id){ let h=5381; for(let i=0;i<id.length;i++) h=(Math.imul(h,33)+id.charCodeAt(i))>>>0; return h%nch; }
+function details(id){ const p=P[id]; if(p.x!==undefined||p.src!==undefined||p.media) return Promise.resolve(p);
+  const b=bucket(id); if(!DET[b]) DET[b]=fetch("d/"+String(b).padStart(2,"0")+".json").then(r=>r.json()).catch(()=>({}));
+  return DET[b].then(c=>Object.assign({},p,c[id]||{})); }
+const sheet=document.getElementById("sheet"), sb=document.getElementById("sb");
+const nameLink=id=>P[id]?`<a href="#" data-go="${esc(id)}">${esc(P[id].n)}</a>`:"";
+let curMed=[];
+function openSheet(id){ sel=id; dirty=true; const p=P[id]; sheet.style.setProperty("--bc",bc(id));
+  sb.innerHTML=head(id,p)+`<div class="ld">…</div>`; sheet.classList.add("on"); sheet.setAttribute("aria-hidden","false"); sheet.scrollTop=0;
+  if(vw<820){ const n=N[id]; const yS=(n.y+H/2)*s+ty; if(yS>vh*0.3) animTo(s,tx,ty-(yS-vh*0.2),420); }
+  details(id).then(q=>{ if(sel!==id) return; sb.innerHTML=head(id,q)+body(id,q); wire(id); }); }
+function head(id,p){ const m=p.m||"unv"; return (p.mes?`<div class="mesl">לויט מסורה</div>`:"")+`<h1>${esc(p.n)}</h1>`+(p.t&&p.t!=="לויט מסורה"?`<p class="ti">${esc(p.t.replace(/^לויט מסורה · /,""))}</p>`:"")+
+  ((p.d||p.pl)?`<p class="meta">${esc([p.d,p.pl].filter(Boolean).join(" · "))}</p>`:"")+`<div class="mark"><span class="dot ${m}">${(MKC[m]||MKC.unv)[1]}</span>${esc(MKN[m]||"")}</div>`; }
+function body(id,p){ let h=""; const u=UP[id]||[];
+  const ms=(p.media||[]).length?p.media.map(x=>({f:x.f,cap:x.cap,cr:x.cr,u:x.u})):[]; curMed=ms;
+  if(ms.length) h+=`<div class="gal">`+ms.map((x,i)=>`<figure data-i="${i}"><img loading="lazy" decoding="async" src="${esc(SRC(x.f,"t"))}" alt=""><figcaption>${esc(x.cap||"")}</figcaption></figure>`).join("")+`</div><div class="gn">${ms.length>1?ms.length+" בילדער · ":""}טאפ פאר פולער גרייס</div>`;
+  h+=`<div class="fam">`; if(u[0]&&P[u[0]]) h+=`<div><b>טאטע</b><span>${nameLink(u[0])}</span></div>`; if(u[1]&&P[u[1]]) h+=`<div><b>מאמע</b><span>${nameLink(u[1])}</span></div>`;
+  const ks=(kids[id]||[]).filter(c=>P[c]); if(ks.length) h+=`<div><b>קינדער</b><span>${ks.map(nameLink).join(" · ")}</span></div>`;
+  const sp=[]; for(const c of ks){ const cu=UP[c]||[]; const o=cu[0]===id?cu[1]:cu[0]; if(o&&P[o]&&!sp.includes(o)) sp.push(o); } if(sp.length) h+=`<div><b>זיווג</b><span>${sp.map(nameLink).join(" · ")}</span></div>`;
+  if(p.sibof&&P[p.sibof]) h+=`<div><b>געשוויסטער</b><span>${nameLink(p.sibof)}</span></div>`; const ss=(sibsOf[id]||[]); if(ss.length) h+=`<div><b>געשוויסטער</b><span>${ss.map(nameLink).join(" · ")}</span></div>`;
+  h+=`</div>`;
+  const lm=LM[id]; if(lm&&lm[1]) h+=`<p class="note2">${esc(lm[1])}</p>`;
+  if(p.inhw) h+=`<p class="note2">${esc(p.inhw)}</p>`;
+  if(p.x) h+=`<div class="tx">${esc(p.x)}</div>`;
+  if(p.src) h+=`<div class="src">${esc(p.src)}</div>`;
+  if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t||"מקור")} ↗</a>`).join("")+`</div>`;
+  return h; }
+function wire(id){ sb.querySelectorAll("[data-go]").forEach(a=>a.onclick=ev=>{ ev.preventDefault(); const t=a.dataset.go; if(N[t]) focus(t); openSheet(t); });
+  sb.querySelectorAll(".gal figure").forEach(f=>f.onclick=()=>openZoom(+f.dataset.i)); }
+function closeSheet(){ sheet.classList.remove("on"); sheet.setAttribute("aria-hidden","true"); sel=null; dirty=true; }
+document.getElementById("sx").onclick=closeSheet;
+(function sheetDrag(){ let y0=null,dy=0; const g=document.getElementById("grab");
+  sheet.addEventListener("touchstart",e=>{ if(sheet.scrollTop>0) return; y0=e.touches[0].clientY; dy=0; },{passive:true});
+  sheet.addEventListener("touchmove",e=>{ if(y0==null) return; dy=e.touches[0].clientY-y0; if(dy>0&&sheet.scrollTop<=0){ sheet.style.transition="none"; sheet.style.transform=`translateY(${dy}px)`; } },{passive:true});
+  sheet.addEventListener("touchend",()=>{ if(y0==null) return; sheet.style.transition=""; sheet.style.transform=""; if(dy>90) closeSheet(); y0=null; },{passive:true}); })();
+/* ---------- zoom viewer: pinch, double-tap, pan, swipe, close ---------- */
+const zv=document.getElementById("zv"), zi=document.getElementById("zi"), zst=document.getElementById("zst");
+let zI=0,zs=1,zx=0,zy=0,zb=1,iw=1,ih=1;
+function zApply(){ zi.style.transform=`translate3d(${zx}px,${zy}px,0) scale(${zs})`; }
+function zFit(){ const W_=innerWidth,H_=innerHeight; zb=Math.min(W_/iw,H_/ih); zs=zb; zx=(W_-iw*zs)/2; zy=(H_-ih*zs)/2; zApply(); }
+function openZoom(i){ zI=(i+curMed.length)%curMed.length; const m=curMed[zI]; zv.classList.add("on"); zv.setAttribute("aria-hidden","false");
+  document.getElementById("zc").textContent=(m.cap||"")+(m.cr?" — "+m.cr:""); document.getElementById("zn").textContent=curMed.length>1?(zI+1)+" / "+curMed.length:"";
+  const t=SRC(m.f,"t"); zi.onload=null; zi.src=t; const go=()=>{ iw=zi.naturalWidth||1; ih=zi.naturalHeight||1; zFit(); }; if(zi.complete) go(); else zi.onload=go;
+  const full=SRC(m.f,"z"); if(full!==t){ const im=new Image(); im.onload=()=>{ if(curMed[zI]!==m||!im.naturalWidth) return; const go2=()=>{ const f=iw/im.naturalWidth; iw=im.naturalWidth; ih=im.naturalHeight; zs*=f; zb*=f; zApply(); }; zi.onload=null; zi.src=full; if(zi.complete) go2(); else zi.onload=go2; }; im.src=full; } }
+function closeZoom(){ zv.classList.remove("on"); zv.setAttribute("aria-hidden","true"); }
+document.getElementById("zx").onclick=closeZoom;
+(function zg(){ const zp=new Map(); let pz=null,sx0=0,sy0=0,t0=0,mv=0,lastTap=0,swipe=0;
+  const clamp=()=>{ const W_=innerWidth,H_=innerHeight, w=iw*zs, h=ih*zs; zx=w<=W_?(W_-w)/2:Math.min(0,Math.max(W_-w,zx)); zy=h<=H_?(H_-h)/2:Math.min(0,Math.max(H_-h,zy)); };
+  zst.addEventListener("pointerdown",e=>{ zst.setPointerCapture(e.pointerId); zp.set(e.pointerId,{x:e.clientX,y:e.clientY}); zi.style.transition="none";
+    if(zp.size===1){ sx0=e.clientX; sy0=e.clientY; t0=performance.now(); mv=0; swipe=0; }
+    if(zp.size===2){ const [a,b]=[...zp.values()]; pz={d:Math.hypot(a.x-b.x,a.y-b.y),s0:zs,mx:(a.x+b.x)/2,my:(a.y+b.y)/2}; } },{passive:true});
+  zst.addEventListener("pointermove",e=>{ const o=zp.get(e.pointerId); if(!o) return; const dx=e.clientX-o.x, dy=e.clientY-o.y; o.x=e.clientX; o.y=e.clientY; mv+=Math.abs(dx)+Math.abs(dy);
+    if(zp.size===2&&pz){ const [a,b]=[...zp.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2; const ns=Math.max(zb*0.8,Math.min(zb*8,pz.s0*d/pz.d));
+      const wx=(pz.mx-zx)/zs, wy=(pz.my-zy)/zs; zs=ns; zx=mx-wx*zs; zy=my-wy*zs; pz.mx=mx; pz.my=my; zApply(); return; }
+    if(zp.size===1){ if(zs<=zb*1.02){ swipe=e.clientX-sx0; const sv=e.clientY-sy0; if(Math.abs(sv)>Math.abs(swipe)&&sv>0){ zi.style.transform=`translate3d(${zx}px,${zy+sv}px,0) scale(${zs})`; zv.style.background=`rgba(0,0,0,${Math.max(.3,1-sv/400)})`; } else zi.style.transform=`translate3d(${zx+swipe}px,${zy}px,0) scale(${zs})`; }
+      else { zx+=dx; zy+=dy; zApply(); } } },{passive:true});
+  const end=e=>{ if(!zp.has(e.pointerId)) return; zp.delete(e.pointerId); if(zp.size<2) pz=null; if(zp.size) return;
+    const dt=performance.now()-t0, dX=e.clientX-sx0, dY=e.clientY-sy0; zv.style.background="";
+    if(mv<10&&dt<300){ const now=performance.now(); if(now-lastTap<300){ zi.style.transition="transform .25s ease"; if(zs>zb*1.05){ zFit(); } else { const ns=zb*2.6; const wx=(e.clientX-zx)/zs, wy=(e.clientY-zy)/zs; zs=ns; zx=e.clientX-wx*zs; zy=e.clientY-wy*zs; clamp(); zApply(); } lastTap=0; return; } lastTap=now; return; }
+    if(zs<=zb*1.02){ if(dY>110&&Math.abs(dY)>Math.abs(dX)){ closeZoom(); zApply(); return; }
+      if(Math.abs(dX)>70&&curMed.length>1){ openZoom(zI+(dX<0?1:-1)); return; } zi.style.transition="transform .2s ease"; zFit(); return; }
+    zi.style.transition="transform .18s ease"; clamp(); zApply(); };
+  zst.addEventListener("pointerup",end,{passive:true}); zst.addEventListener("pointercancel",end,{passive:true});
+  zst.addEventListener("wheel",e=>{ e.preventDefault(); const ns=Math.max(zb,Math.min(zb*8,zs*Math.exp(-e.deltaY*0.002))); const wx=(e.clientX-zx)/zs, wy=(e.clientY-zy)/zs; zs=ns; zx=e.clientX-wx*zs; zy=e.clientY-wy*zs; zApply(); },{passive:false});
+  addEventListener("resize",()=>{ if(zv.classList.contains("on")) zFit(); }); })();
+addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("on")) closeZoom(); else closeSheet(); } else if(zv.classList.contains("on")&&(e.key==="ArrowLeft"||e.key==="ArrowRight")) openZoom(zI+(e.key==="ArrowLeft"?1:-1)); });
+/* ---------- start: centred on Alter at a readable zoom ---------- */
+home(); loop();
+(function fromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h) return; const [id,z]=h.split("/"); if(!P[id]) return; if(N[id]) focus(id,Math.max(0.75,s)); openSheet(id);
+  if(z&&z[0]==="z") details(id).then(()=>setTimeout(()=>openZoom(+z.slice(1)||0),120)); })();
+if(document.fonts&&document.fonts.load){ document.fonts.load(FN).then(()=>{ for(const k in TX) delete TX[k]; dirty=true; }); }
+window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};
