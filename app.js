@@ -44,6 +44,11 @@ function lay(id){
 lay(ROOT);
 (function place(){ const st=[[ROOT,0]]; while(st.length){ const [id,x]=st.pop(); const n=N[id]; n.x=x; n.y=-n.dep*RH; for(const [p,o] of n.po||[]) st.push([p,x+o]); } })();
 for(const a in sibsOf){ if(!N[a]||N[a].sibof) continue; sibsOf[a].forEach((sb,k)=>{ N[sb]={x:N[a].x-(k+1)*SIBW,y:N[a].y,dep:N[a].dep,sibof:a}; }); }
+// Alter's own family (Alter 12:55): his wife beside him (to his left), their children one row below, centred under the couple
+const FAM=D.fam||null, KIDS=[]; let minDep=0;
+if(FAM&&N[ROOT]){ const a=N[ROOT]; const sp=FAM.sp&&P[FAM.sp]?FAM.sp:null; if(sp) N[sp]={x:a.x-PITCH,y:a.y,dep:0,spof:ROOT,po:[]};
+  const ks=(FAM.kids||[]).filter(k=>P[k]); const mx=sp?a.x-PITCH/2:a.x;
+  ks.forEach((k,i)=>{ N[k]={x:mx+(i-(ks.length-1)/2)*PITCH,y:a.y+RH,dep:-1,po:[],kid:1}; KIDS.push(k); }); if(ks.length) minDep=-1; }
 const ids=Object.keys(N); const rows={}; let maxDep=0;
 for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(n.dep>maxDep) maxDep=n.dep; }
 for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
@@ -90,7 +95,7 @@ function crest(x,y,r){ cx.beginPath(); cx.moveTo(x,y-r); cx.lineTo(x+r*0.75,y); 
 function draw(){
   dirty=false; cx.setTransform(dpr,0,0,dpr,0,0); cx.clearRect(0,0,vw,vh);
   const x0=(-tx)/s, x1=(vw-tx)/s, y0=(-ty)/s, y1=(vh-ty)/s;
-  const d0=Math.max(0,Math.floor(-y1/RH)-1), d1=Math.min(maxDep,Math.ceil(-y0/RH)+1);
+  const d0=Math.max(minDep,Math.floor(-y1/RH)-1), d1=Math.min(maxDep,Math.ceil(-y0/RH)+1);
   // gentle generation bands (screen space) + generation numbers
   cx.font='500 11px FRL, serif'; cx.textAlign="right"; cx.textBaseline="middle";
   const step=s<0.08?10:s<0.2?5:1;
@@ -104,12 +109,18 @@ function draw(){
     if(Math.abs(q.x-n.x)<1) cx.lineTo(q.x,yb);
     else { const sg=q.x>n.x?1:-1, r=Math.min(rad,Math.abs(q.x-n.x)/2); cx.lineTo(n.x,lane+r); cx.quadraticCurveTo(n.x,lane,n.x+sg*r,lane); cx.lineTo(q.x-sg*r,lane); cx.quadraticCurveTo(q.x,lane,q.x,lane-r); cx.lineTo(q.x,yb); }
     cx.stroke(); };
+  // a child of Alter's family: up to the lane, across to the middle of the couple, up to the marriage line
+  const kidLink=(k,bold)=>{ const h=N[ROOT], w=FAM.sp&&N[FAM.sp]; const xm=w?(h.x+w.x)/2:h.x, ym=w?h.y+H/2+4:h.y+H; link(N[k],{x:xm,y:ym-H},ROOT,bold); };
   cx.lineJoin="round"; cx.lineCap="round"; cx.globalAlpha=s<0.1?0.6:0.85;
-  for(let d=Math.max(0,d0-1);d<=d1;d++){ const row=rows[d]; if(!row) continue;
+  for(let d=Math.max(minDep,d0-1);d<=d1;d++){ const row=rows[d]; if(!row) continue;
     for(const id of row){ const n=N[id]; if(!n.po||!n.po.length) continue;
       for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue; link(n,q,p,false); } } }
+  if(FAM&&FAM.sp&&N[FAM.sp]){ const h=N[ROOT], w=N[FAM.sp], ym=h.y+H/2, xa=Math.min(h.x,w.x)+W/2, xb=Math.max(h.x,w.x)-W/2; cx.strokeStyle=C.gold; cx.lineWidth=lw;
+    cx.beginPath(); cx.moveTo(xa,ym-4); cx.lineTo(xb,ym-4); cx.moveTo(xa,ym+4); cx.lineTo(xb,ym+4); cx.stroke(); }
+  for(const k of KIDS) kidLink(k,false);
   cx.globalAlpha=1;
   if(sel&&N[sel]){ const n=N[sel]; for(const [p] of n.po||[]) link(n,N[p],p,true); if(n.ch&&N[n.ch]) link(N[n.ch],n,sel,true);
+    for(const k of KIDS) if(sel===k||sel===ROOT||(FAM&&sel===FAM.sp)) kidLink(k,true);
     // a second line of descent (pedigree collapse) shows only for the tapped card, dashed
     cx.setLineDash([10,8]); cx.lineWidth=lw*1.4; cx.strokeStyle="rgba(176,86,63,.7)";
     for(const [c,p] of extra){ if(c!==sel&&p!==sel) continue; const a_=N[c],b_=N[p]; if(!a_||!b_) continue; cx.beginPath(); cx.moveTo(a_.x,a_.y); cx.bezierCurveTo(a_.x,a_.y-RH*.6,b_.x,b_.y+H+RH*.4,b_.x,b_.y+H); cx.stroke(); }
@@ -176,8 +187,9 @@ function animTo(ns,ntx,nty,ms){ const s0=s,x0=tx,y0=ty,t0=performance.now(); vx=
 function zoomTo(sx,sy,ns){ const wx=(sx-tx)/s, wy=(sy-ty)/s; animTo(ns,sx-wx*ns,sy-wy*ns,380); }
 function focus(id,ns){ const n=N[id]; if(!n) return; ns=ns||Math.max(s,0.75); const sheetUp=document.getElementById("sheet").classList.contains("on")&&vw<820;
   animTo(ns,vw/2-n.x*ns,(sheetUp?vh*0.2:vh*0.55)-(n.y+H/2)*ns,600); }
-function home(){ const n=N[ROOT]; const ns=Math.min(1,vw/(2*PITCH+30)); s=ns; tx=vw/2-n.x*s; ty=vh*0.78-(n.y+H/2)*s; dirty=true; }
-document.getElementById("home").onclick=()=>{ const n=N[ROOT]; const ns=Math.min(1,vw/(2*PITCH+30)); animTo(ns,vw/2-n.x*ns,vh*0.78-(n.y+H/2)*ns,650); };
+function homeV(){ const n=N[ROOT]; const ns=Math.min(1,vw/(2*PITCH+30)); const cxw=KIDS.length&&FAM.sp&&N[FAM.sp]?n.x-PITCH/2:n.x; return [ns,vw/2-cxw*ns,(KIDS.length?vh*0.5:vh*0.78)-(n.y+H/2)*ns]; }
+function home(){ [s,tx,ty]=homeV(); dirty=true; }
+document.getElementById("home").onclick=()=>{ const [ns,a,b]=homeV(); animTo(ns,a,b,650); };
 /* ---------- detail sheet ---------- */
 const DET={}; const nch=D.nch||32;
 function bucket(id){ let h=5381; for(let i=0;i<id.length;i++) h=(Math.imul(h,33)+id.charCodeAt(i))>>>0; return h%nch; }
@@ -205,7 +217,7 @@ function body(id,p){ let h=""; const u=UP[id]||[];
   const lm=LM[id]; if(lm&&lm[1]) h+=`<p class="note2">${esc(lm[1])}</p>`;
   if(p.inhw) h+=`<p class="note2">${esc(p.inhw)}</p>`;
   const NI=LN&&LN.ids[id]; const nf=new Set(((NI&&NI.f)||[]).map(t=>t.trim()));
-  if(NI&&wnOn) h=`<p class="note2" style="color:#8a6a2c"><span class="nwb">נייַ</span> ${NI.c?"א נייַער קאַרטל · ":""}${(NI.f||[]).length} נייַע פאַקטן${(NI.p||[]).length?" · "+NI.p.length+" נייַע בילדער":""} (${esc(LN.date)})</p>`+h;
+  if(NI&&wnOn) h=`<p class="note2" style="color:#8a6a2c"><span class="nwb">נייַ</span> ${NI.c?"א נייַער קאַרטל · ":""}${(NI.f||[]).length} נייַע פאַקטן${(NI.p||[]).length?" · "+NI.p.length+" נייַע בילדער":""} (<bdi dir="ltr">${esc(LN.date)}</bdi>)</p>`+h;
   if(p.x) h+=`<div class="tx">`+p.x.split("\n").filter(l=>l.trim()).map(l=>{ const isN=wnOn&&nf.has(l.trim()); return `<div class="ln${isN?" nw":""}">${isN?'<span class="nwb">נייַ</span>':""}${esc(l)}</div>`; }).join("")+`</div>`;
   if(p.src) h+=`<div class="src">${esc(p.src)}</div>`;
   if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t||"מקור")} ↗</a>`).join("")+`</div>`;
