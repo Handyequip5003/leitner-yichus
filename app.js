@@ -49,12 +49,16 @@ function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); c
   if(out.length<maxl&&cur) out.push(cur); if(out.length>maxl) out.length=maxl;
   if(out.length===maxl&&w.join(" ").length>out.join(" ").length+1){ let s=out[maxl-1]; while(s.length>1&&cx.measureText(s+"…").width>maxw) s=s.slice(0,-1); out[maxl-1]=s+"…"; }
   return out; }
+function wrapAll(t,font,maxw){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
+  for(const x of w){ const tr=cur?cur+" "+x:x; if(!cur||cx.measureText(tr).width<=maxw) cur=tr; else { out.push(cur); cur=x; } } if(cur) out.push(cur); return out; }
+function fitName(t,sizes,maxw,maxl,weight){ let best=null; for(const z of sizes){ const f=weight+" "+z+'px FRL, "Frank Ruhl Libre", serif'; const ls=wrapAll(t,f,maxw); best={f,ls,z}; if(ls.length<=maxl){ cx.font=f; if(ls.every(l=>cx.measureText(l).width<=maxw)) return best; } } return best; }
 const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id); const tw=por?W-109:W-39;  // keeps text clear of the mark circle and the portrait
   const fit=t=>{ cx.font=FD; if(cx.measureText(t).width<=tw-14) return t; let q=t; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
   const fitT=t=>{ cx.font=FT; let q=t; if(cx.measureText(q).width<=tw-14) return q; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
   const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl);
   const til=tl?wrap(tl,FT,tw-14,2):[];
-  return TX[id]={nm:wrap(p.n,FN,tw-6,2),dt:p.d?fit(p.d):"",pl:p.pl?fit(p.pl):"",ti:til,rab,dtl:1e9,dtc:fit,por}; }
+  const NM=fitName(p.n,[17,15.5,14],tw-6,3,"700"); const MID=fitName(p.n,[32,28,25,22],W-40,3,"700");
+  return TX[id]={nm:NM.ls,nmf:NM.f,nmz:NM.z,mid:MID,dt:p.d?fit(p.d):"",pl:p.pl?fit(p.pl):"",ti:til,rab,dtl:1e9,dtc:fit,por}; }
 function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m.k||"x")[0],cap:m.cap,cr:m.cr,u:m.u}));
   return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
 function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
@@ -109,7 +113,8 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   if(id===sel||root){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
   // family-colour top edge
   cx.save(); rr(x,y,W,H,10); cx.clip(); cx.fillStyle=col; cx.fillRect(x,y,W,root?7:5); cx.restore();
-  if(lod<75){ cx.fillStyle=C.ink; cx.font='700 34px FRL, serif'; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; const t=txt(id).nm[0]||""; cx.fillText(t.length>11?t.slice(0,11)+"…":t,n.x,y+H/2+3); cx.direction="ltr"; markAt(x+16,y+20,m,10); return; }
+  if(lod<140){ const M=txt(id).mid; cx.fillStyle=C.ink; cx.font=M.f; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl";
+    const lh=M.z*1.12, n0=M.ls.length; let yy=y+H/2+6-(n0-1)*lh/2; for(const l of M.ls){ cx.fillText(l,n.x,yy); yy+=lh; } cx.direction="ltr"; markAt(x+16,y+20,m,10); return; }
   const T=txt(id); let rx=x+W-13;
   if(T.por){ const R=30, pcx=x+W-13-R, pcy=y+16+R+4;
     if(lod>105){ const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
@@ -118,11 +123,11 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
     rx=x+W-13-2*R-10; }
   cx.direction="rtl"; cx.textAlign="right"; cx.textBaseline="alphabetic";
   let yy=y+30; if(T.rab&&!mes){ crest(rx-4,yy-6,4.4); }
-  cx.fillStyle=C.ink; cx.font=FN; const off=T.rab&&!mes?12:0;
-  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=21; });
+  cx.fillStyle=C.ink; cx.font=T.nmf; const off=T.rab&&!mes?12:0; const nlh=T.nmz*1.22;
+  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=nlh; });
   yy+=2;
   if(mes){ cx.font='600 12.5px FRL, serif'; cx.fillStyle=C.gold; cx.fillText("לויט מסורה",rx,yy); yy+=18; }
-  else if(T.ti.length){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; for(const l of T.ti){ cx.fillText(l,rx,yy); yy+=17; } }
+  else if(T.ti.length){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; for(const l of T.ti){ if(yy>y+H-30) break; cx.fillText(l,rx,yy); yy+=17; } }
   cx.font=FD; cx.fillStyle=C.date;
   const lines=[T.pl,T.dt].filter(Boolean); let yb=y+H-12-(lines.length-1)*17; yb=Math.max(yb,yy+2);
   for(const l of lines){ if(yb>y+H-8) break; cx.fillText(l,rx,yb); yb+=17; }
