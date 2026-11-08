@@ -2,6 +2,9 @@
 "use strict";
 const D=window.YDATA; const P=D.people, UP=D.up||{}, LM=D.linkm||{};
 const ROOT=D.root||"alter";
+/* settings (Alter Nov 8 6:27 PM): by default only the direct line up (parents, grandparents and higher); siblings behind ⚙ */
+const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs}; })();
+function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"), cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
 const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f"};
@@ -14,7 +17,8 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",
 /* ---------- layout: tidy ancestor tree with contours (root at bottom) ---------- */
 const N={}; // id -> {x,y,dep,ch(child in spanning tree),sib:[]}
 const kids={}; for(const c in UP){ for(const p of UP[c]||[]) if(p&&P[p]) (kids[p]=kids[p]||[]).push(c); }
-const sibsOf={}; for(const id in P){ const a=P[id].sibof; if(a&&P[a]) (sibsOf[a]=sibsOf[a]||[]).push(id); }
+const SIBALL={}; for(const id in P){ const a=P[id].sibof; if(a&&P[a]) (SIBALL[a]=SIBALL[a]||[]).push(id); }
+const sibsOf=SET.sibs?SIBALL:{};  // hidden siblings take no room: the layout re-flows without them
 const tparents={}; const extra=[]; // extra = cross links (pedigree collapse)
 (function span(){ const seen=new Set([ROOT]); let q=[ROOT]; N[ROOT]={dep:0};
   while(q.length){ const nq=[]; for(const id of q){ const u=UP[id]||[]; tparents[id]=[];
@@ -133,7 +137,7 @@ const isURI=f=>/^data:|\//.test(f)&&!/^[mtz]\//.test(f);
 const AB=/\.sites\.tab\.bot$/.test(location.hostname)?"https://handyequip5003.github.io/leitner-yichus/":"";  // tab.bot copy reads pictures + detail chunks from the GitHub Pages copy
 const SRC=(f,tier)=>f.startsWith("data:")?f:AB+(/^[mtz]\//.test(f)?tier+f.slice(1):f.includes("/")?f:tier+"/"+f+".jpg");
 /* ---------- what's new (Alter 12:51): highlights what the last publish added ---------- */
-const LN=D.lastNew||null; const NEWS=LN?Object.keys(LN.ids).filter(k=>P[k]):[]; const NEWSET=new Set(NEWS); let wnOn=false, wnI=-1;
+const LN=D.lastNew||null; const NEWS=LN?Object.keys(LN.ids).filter(k=>P[k]&&N[k]):[]; const NEWSET=new Set(NEWS); let wnOn=false, wnI=-1;
 NEWS.sort((a,b)=>(N[a]?N[a].dep:0)-(N[b]?N[b].dep:0));
 /* ---------- view state ---------- */
 let s=0.9,tx=0,ty=0,dpr=Math.min(2,window.devicePixelRatio||1),vw=0,vh=0,dirty=true,sel=null;
@@ -264,9 +268,9 @@ const nameLink=id=>P[id]?`<a href="#" data-go="${esc(id)}">${esc(P[id].n)}</a>`:
 let curMed=[];
 function openSheet(id){ sel=id; dirty=true; const p=P[id]; sheet.style.setProperty("--bc",bc(id));
   sb.innerHTML=head(id,p)+`<div class="ld">…</div>`; sheet.classList.add("on"); sheet.setAttribute("aria-hidden","false"); sheet.scrollTop=0;
-  if(vw<820){ const n=N[id]; const yS=(n.y+H/2)*s+ty; if(yS>vh*0.3) animTo(s,tx,ty-(yS-vh*0.2),420); }
+  if(vw<820&&N[id]){ const n=N[id]; const yS=(n.y+H/2)*s+ty; if(yS>vh*0.3) animTo(s,tx,ty-(yS-vh*0.2),420); }
   details(id).then(q=>{ if(sel!==id) return; sb.innerHTML=head(id,q)+body(id,q); wire(id); }); }
-function head(id,p){ const m=p.m||"unv"; return (p.mes?`<div class="mesl">לויט מסורה</div>`:"")+`<h1>${esc(p.n)}</h1>`+(p.t&&p.t!=="לויט מסורה"?`<p class="ti">${esc(p.t.replace(/^לויט מסורה · /,""))}</p>`:"")+
+function head(id,p){ const m=p.m||"unv"; return (!N[id]&&P[id]&&P[id].sibof?`<p class="hidn">דער קארטל איז באהאלטן אינעם בוים (געשוויסטער ווערן נישט געוויזן). <button type="button" data-sibon>ווייז געשוויסטער</button></p>`:"")+(p.mes?`<div class="mesl">לויט מסורה</div>`:"")+`<h1>${esc(p.n)}</h1>`+(p.t&&p.t!=="לויט מסורה"?`<p class="ti">${esc(p.t.replace(/^לויט מסורה · /,""))}</p>`:"")+
   ((p.d||p.pl)?`<p class="meta">${esc([p.d,p.pl].filter(Boolean).join(" · "))}</p>`:"")+`<div class="mark"><span class="dot ${m}">${(MKC[m]||MKC.unv)[1]}</span>${esc(MKN[m]||"")}</div>`; }
 function body(id,p){ let h=""; const u=UP[id]||[];
   const ms=(p.media||[]).length?p.media.map(x=>({f:x.f,cap:x.cap,cr:x.cr,u:x.u})):[]; curMed=ms;
@@ -275,7 +279,7 @@ function body(id,p){ let h=""; const u=UP[id]||[];
   h+=`<div class="fam">`; if(u[0]&&P[u[0]]) h+=`<div><b>טאטע</b><span>${nameLink(u[0])}</span></div>`; if(u[1]&&P[u[1]]) h+=`<div><b>מאמע</b><span>${nameLink(u[1])}</span></div>`;
   const ks=(kids[id]||[]).filter(c=>P[c]); if(ks.length) h+=`<div><b>קינדער</b><span>${ks.map(nameLink).join(" · ")}</span></div>`;
   const sp=[]; for(const c of ks){ const cu=UP[c]||[]; const o=cu[0]===id?cu[1]:cu[0]; if(o&&P[o]&&!sp.includes(o)) sp.push(o); } if(sp.length) h+=`<div><b>זיווג</b><span>${sp.map(nameLink).join(" · ")}</span></div>`;
-  if(p.sibof&&P[p.sibof]) h+=`<div><b>געשוויסטער</b><span>${nameLink(p.sibof)}</span></div>`; const ss=(sibsOf[id]||[]); if(ss.length) h+=`<div><b>געשוויסטער</b><span>${ss.map(nameLink).join(" · ")}</span></div>`;
+  if(p.sibof&&P[p.sibof]) h+=`<div><b>געשוויסטער</b><span>${nameLink(p.sibof)}</span></div>`; const ss=(SIBALL[id]||[]); if(ss.length) h+=`<div><b>געשוויסטער</b><span>${ss.map(nameLink).join(" · ")}</span></div>`;
   h+=`</div>`;
   const lm=LM[id]; if(lm&&lm[1]) h+=`<p class="note2">${esc(lm[1])}</p>`;
   if(p.inhw) h+=`<p class="note2">${esc(p.inhw)}</p>`;
@@ -333,6 +337,17 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
   document.getElementById("wnn").onclick=()=>go(wnI+1); document.getElementById("wnp").onclick=()=>go(wnI-1);
   t.onclick=()=>{ if(wnI>=0) openSheet(NEWS[wnI]); };
   window.__ywn=()=>bt.onclick(); })();
+
+/* ---------- settings panel ⚙ (Alter Nov 8 6:27 PM) ---------- */
+(function(){ const bt=document.getElementById("gear"), pn=document.getElementById("setp"); if(!bt||!pn) return;
+  const NSIB=new Set([].concat(...Object.values(SIBALL)).filter(x=>!(x in tparents))).size;
+  const ck=document.getElementById("s_sibs"); ck.checked=SET.sibs; document.getElementById("s_sibn").textContent=NSIB;
+  const open=v=>{ pn.hidden=!v; bt.classList.toggle("on",v); };
+  bt.onclick=()=>open(pn.hidden); document.getElementById("setx").onclick=()=>open(false);
+  const apply=v=>{ SET.sibs=v; saveSet(); const h=sel?"#"+encodeURIComponent(sel):""; history.replaceState(null,"",location.pathname+location.search+h); location.reload(); };
+  ck.onchange=()=>apply(ck.checked);
+  sb.addEventListener("click",e=>{ if(e.target.closest("[data-sibon]")){ e.preventDefault(); apply(true); } });
+  window.__yset=apply; })();
 /* ---------- start: centred on Alter at a readable zoom ---------- */
 home(); loop();
 (function fromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h) return; const [id,z]=h.split("/"); if(!P[id]) return; if(N[id]) focus(id,Math.max(0.75,s)); openSheet(id);
