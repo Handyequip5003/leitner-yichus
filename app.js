@@ -53,6 +53,50 @@ const ids=Object.keys(N); const rows={}; let maxDep=0;
 for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(n.dep>maxDep) maxDep=n.dep; }
 for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
 let minX=1e9,maxX=-1e9; for(const id of ids){ minX=Math.min(minX,N[id].x-W/2); maxX=Math.max(maxX,N[id].x+W/2); }
+/* ---------- each person once (Alter Nov 8 1:43 PM): an ancestor reached through several lines is ONE card; every
+   further line of descent is routed into that card as its own clean orthogonal path (child -> lane -> free column
+   between cards -> lane under the parent -> up). Only when the parent is very far across the tree does the child get a
+   small dashed "זעה אויבן ⟵" stub that flies to the real card. ---------- */
+const GAP=RH-H, XM=24, STUBX=PITCH*60; const XR=[], STUBS=[], SIBL=[];
+function freeAt(x,dlo,dhi){ for(let d=dlo;d<=dhi;d++){ const row=rows[d]; if(!row) continue; let lo=0,hi=row.length;
+    while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2+XM<x) lo=m+1; else hi=m; }
+    if(lo<row.length&&N[row[lo]].x-W/2-XM<=x) return false; } return true; }
+(function routes(){ const used={}, intoP={}; const TR={}; const COLS=[];
+  const trackFree=(key,t,xa,xb)=>{ const L=TR[key+'|'+t]; if(!L) return true; for(const [a,b] of L) if(xa<b+14&&xb>a-14) return false; return true; };
+  const take=(key,t,xa,xb)=>{ (TR[key+'|'+t]=TR[key+'|'+t]||[]).push([xa,xb]); };
+  const findT=(key,xa,xb)=>{ for(let t=0;t<9;t++) if(trackFree(key,t,Math.min(xa,xb),Math.max(xa,xb))) return t; return -1; };
+  const colFree=(x,ya,yb)=>{ const y0_=Math.min(ya,yb), y1_=Math.max(ya,yb); for(const c of COLS) if(Math.abs(c[0]-x)<7&&y0_<c[2]+10&&y1_>c[1]-10) return false; return true; };
+  const ord=extra.map((e,k)=>k).filter(k=>N[extra[k][0]]&&N[extra[k][1]]).sort((i,j)=>{ const A=extra[i],B=extra[j]; return Math.abs(N[A[1]].x-N[A[0]].x)-Math.abs(N[B[1]].x-N[B[0]].x); });
+  for(const k of ord){ const [c,p]=extra[k]; const n=N[c], q=N[p]; const dc=n.dep, dp=q.dep;
+    const side=q.x>=n.x?1:-1; const u=used[c]||0; const sx=n.x+side*(40+u*30);
+    const ip=intoP[p]||0; const ex=q.x-side*(26+ip*16);   // enter the parent's bottom beside its own line
+    let pts=null, tk=[];
+    if(Math.abs(ex-sx)>STUBX){ STUBS.push({c,p}); continue; }
+    if(dp===dc+1){ const key='g'+dc+'B'; const t=findT(key,sx,ex); if(t>=0){ const ly=q.y+H+58+t*5.5; if(colFree(sx,n.y,ly)){ pts=[[sx,n.y],[sx,ly],[ex,ly],[ex,q.y+H]]; tk=[[key,t,sx,ex]]; } } }
+    else { const dlo=dp>dc?dc+1:dp, dhi=dp>dc?dp-1:dc; const kA='g'+dc+'A', kB='g'+(dp-1)+'B';
+      const lo=Math.min(sx,ex)-PITCH*3, hi=Math.max(sx,ex)+PITCH*3; const cand=[ex,sx];
+      for(let d=dlo;d<=dhi;d++){ const row=rows[d]; if(!row) continue; let i0=0,i1=row.length; while(i0<i1){ const m=(i0+i1)>>1; if(N[row[m]].x<lo-W) i0=m+1; else i1=m; }
+        for(let i=i0;i<row.length;i++){ const x=N[row[i]].x; if(x>hi+W) break; for(let o=0;o<5;o++) cand.push(x-W/2-XM-4-o*8, x+W/2+XM+4+o*8); } }
+      cand.sort((x,y)=>(Math.abs(x-sx)+Math.abs(ex-x)+Math.abs(x-ex)*0.05)-(Math.abs(y-sx)+Math.abs(ex-y)+Math.abs(y-ex)*0.05));
+      for(const xv of cand){ if(xv<lo||xv>hi) continue; if(!freeAt(xv,dlo,dhi)) continue;
+        const tA=findT(kA,sx,xv), tB=findT(kB,xv,ex); if(tA<0||tB<0) continue;
+        const l1=n.y-58-tA*5.5, l2=q.y+H+58+tB*5.5; if(!colFree(xv,l1,l2)) continue;
+        pts=[[sx,n.y],[sx,l1],[xv,l1],[xv,l2],[ex,l2],[ex,q.y+H]]; tk=[[kA,tA,sx,xv],[kB,tB,xv,ex]]; COLS.push([xv,Math.min(l1,l2),Math.max(l1,l2)]); break; } }
+    if(!pts){ STUBS.push({c,p}); continue; }
+    used[c]=u+1; intoP[p]=ip+1; for(const [key,t,xa,xb] of tk) take(key,t,Math.min(xa,xb),Math.max(xa,xb));
+    let x0=1e18,x1=-1e18,y0=1e18,y1=-1e18; for(const [x,y] of pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }
+    XR.push({c,p,pts,x0,x1,y0,y1}); }
+  // place each stub on the child's top edge where no line leaves the card
+  const occ={}; for(const r of XR){ (occ[r.c]=occ[r.c]||[]).push(r.pts[0][0]-N[r.c].x); }
+  for(const t of STUBS){ const n=N[t.c]; const o=(occ[t.c]=occ[t.c]||[]); if(n.po&&n.po.length) o.push(0);
+    const w=140; let best=null; for(const cxo of [-82,82,-45,45,0]){ if(o.some(x=>Math.abs(x-cxo)<w/2+10)) continue; best=cxo; break; }
+    if(best==null) best=-82; t.x=n.x+best; t.w=w; t.h=42; t.y=n.y-50; o.push(best-w/2+8,best,best+w/2-8); }
+  for(const id in N){ const n=N[id]; if(!n.sibof) continue; const a_=N[n.sibof]; if(!a_) continue;
+    const has=(a_.po&&a_.po.length)||XR.some(r=>r.c===n.sibof)||STUBS.some(t=>t.c===n.sibof); if(has) SIBL.push([id,n.sibof]); }
+})();
+function poly(pts,r){ cx.beginPath(); cx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length-1;i++){ const [ax,ay]=pts[i-1],[bx,by]=pts[i],[ccx,ccy]=pts[i+1]; const rr_=Math.min(r,Math.hypot(bx-ax,by-ay)/2,Math.hypot(ccx-bx,ccy-by)/2); if(rr_<1) cx.lineTo(bx,by); else cx.arcTo(bx,by,ccx,ccy,rr_); }
+  const e=pts[pts.length-1]; cx.lineTo(e[0],e[1]); cx.stroke(); }
 /* ---------- text prep (wrapped once, world units) ---------- */
 const FN='700 17px FRL, "Frank Ruhl Libre", serif', FD='400 13px FRL, "Frank Ruhl Libre", serif', FT='italic 400 13.5px FRL, "Frank Ruhl Libre", serif';
 function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
@@ -115,20 +159,26 @@ function draw(){
   for(let d=Math.max(minDep,d0-1);d<=d1;d++){ const row=rows[d]; if(!row) continue;
     for(const id of row){ const n=N[id]; if(!n.po||!n.po.length) continue;
       for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue; link(n,q,p,false); } } }
+  // further lines of descent into the one card (each person once) + sibling brackets
+  for(const r of XR){ if(r.x1<x0-W||r.x0>x1+W||r.y1<y0-H||r.y0>y1+H) continue; cx.strokeStyle=bc(r.p); cx.lineWidth=lw; poly(r.pts,rad); }
+  for(const [sb,an] of SIBL){ const n2=N[sb],a3=N[an]; if(Math.max(n2.x,a3.x)<x0-W||Math.min(n2.x,a3.x)>x1+W) continue; cx.strokeStyle=bc(an); cx.lineWidth=lw*0.8; cx.setLineDash([2,0]); poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); }
   if(FAM&&FAM.sp&&N[FAM.sp]){ const h=N[ROOT], w=N[FAM.sp], ym=h.y+H/2, xa=Math.min(h.x,w.x)+W/2, xb=Math.max(h.x,w.x)-W/2; cx.strokeStyle=C.gold; cx.lineWidth=lw;
     cx.beginPath(); cx.moveTo(xa,ym-4); cx.lineTo(xb,ym-4); cx.moveTo(xa,ym+4); cx.lineTo(xb,ym+4); cx.stroke(); }
   for(const k of KIDS) kidLink(k,false);
   cx.globalAlpha=1;
   if(sel&&N[sel]){ const n=N[sel]; for(const [p] of n.po||[]) link(n,N[p],p,true); if(n.ch&&N[n.ch]) link(N[n.ch],n,sel,true);
     for(const k of KIDS) if(sel===k||sel===ROOT||(FAM&&sel===FAM.sp)) kidLink(k,true);
-    // a second line of descent (pedigree collapse) shows only for the tapped card, dashed
-    cx.setLineDash([10,8]); cx.lineWidth=lw*1.4; cx.strokeStyle="rgba(176,86,63,.7)";
-    for(const [c,p] of extra){ if(c!==sel&&p!==sel) continue; const a_=N[c],b_=N[p]; if(!a_||!b_) continue; cx.beginPath(); cx.moveTo(a_.x,a_.y); cx.bezierCurveTo(a_.x,a_.y-RH*.6,b_.x,b_.y+H+RH*.4,b_.x,b_.y+H); cx.stroke(); }
-    cx.setLineDash([]); }
+    for(const r of XR){ if(r.c===sel||r.p===sel){ cx.strokeStyle=bc(r.p); cx.lineWidth=lw*2.4; poly(r.pts,rad); } }
+    for(const [sb,an] of SIBL){ if(sb===sel||an===sel){ const n2=N[sb],a3=N[an]; cx.strokeStyle=bc(an); cx.lineWidth=lw*1.8; poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); } } }
   const lod=s*W; let drawn=0;
   for(let d=d0;d<=d1;d++){ const row=rows[d]; if(!row) continue;
     let lo=0,hi=row.length; while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2<x0) lo=m+1; else hi=m; }
     for(let i=lo;i<row.length;i++){ const id=row[i], n=N[id]; if(n.x-W/2>x1) break; drawn++; card(id,n,lod); } }
+  // dashed stubs for the rare far-away second line: tap flies to the one real card
+  if(STUBS.length&&lod>=20){ for(const t of STUBS){ if(t.x+t.w/2<x0||t.x-t.w/2>x1||t.y+t.h<y0||t.y>y1) continue;
+      cx.save(); cx.setLineDash([6,5]); cx.lineWidth=Math.max(1.6,1.2/s); cx.strokeStyle=bc(t.p); cx.fillStyle="rgba(255,250,240,.96)"; rr(t.x-t.w/2,t.y,t.w,t.h,10); cx.fill(); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle=C.ink; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.font='700 13px FRL, "Frank Ruhl Libre", serif'; cx.fillText("זעה אויבן ⟵",t.x,t.y+14);
+      let fs=11.5; const nm=P[t.p].n; cx.font='400 '+fs+'px FRL, serif'; while(cx.measureText(nm).width>t.w-12&&fs>7){ fs-=0.5; cx.font='400 '+fs+'px FRL, serif'; } cx.fillStyle=C.ink2; cx.fillText(nm,t.x,t.y+32); cx.restore(); } }
   return drawn; }
 function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.mes, root=id===ROOT, col=bc(id);
   const hl=wnOn&&NEWSET.has(id);
@@ -177,9 +227,10 @@ cv.addEventListener("pointermove",e=>{ const o=ptr.get(e.pointerId); if(!o) retu
 function up(e){ const had=ptr.has(e.pointerId); ptr.delete(e.pointerId); if(ptr.size<2) pinch=null; if(ptr.size===1){ vx=vy=0; }
   if(!had||ptr.size) return; const now=performance.now(); if(now-lastT>60){ vx=vy=0; } lastT=now;
   if(moved<10&&now-downAt<500){ vx=vy=0; const id=hit(e.clientX,e.clientY);
-    if(id){ openSheet(id); } else if(now-lastTap<320){ zoomTo(e.clientX,e.clientY,Math.min(3,s*2.2)); } lastTap=now; } }
+    const st=hitStub(e.clientX,e.clientY); if(st){ openSheet(st.p); focus(st.p,Math.max(s,0.6)); } else if(id){ openSheet(id); } else if(now-lastTap<320){ zoomTo(e.clientX,e.clientY,Math.min(3,s*2.2)); } lastTap=now; } }
 cv.addEventListener("pointerup",up,{passive:true}); cv.addEventListener("pointercancel",up,{passive:true});
 cv.addEventListener("wheel",e=>{ e.preventDefault(); const f=Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0018)); const ns=clampS(s*f); const wx=(e.clientX-tx)/s, wy=(e.clientY-ty)/s; s=ns; tx=e.clientX-wx*s; ty=e.clientY-wy*s; dirty=true; },{passive:false});
+function hitStub(sx,sy){ const wx=(sx-tx)/s, wy=(sy-ty)/s; for(const t of STUBS) if(wx>=t.x-t.w/2-4&&wx<=t.x+t.w/2+4&&wy>=t.y-4&&wy<=t.y+t.h+4) return t; return null; }
 function hit(sx,sy){ const wx=(sx-tx)/s, wy=(sy-ty)/s; const d=Math.round(-(wy-H/2)/RH); const row=rows[d]; if(!row) return null; if(wy<-d*RH-6||wy>-d*RH+H+6) return null;
   for(const id of row){ const n=N[id]; if(wx>=n.x-W/2-4&&wx<=n.x+W/2+4) return id; } return null; }
 function animTo(ns,ntx,nty,ms){ const s0=s,x0=tx,y0=ty,t0=performance.now(); vx=vy=0;
