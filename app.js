@@ -4,7 +4,7 @@ const D=window.YDATA; const P=D.people, UP=D.up||{}, LM=D.linkm||{};
 const ROOT=D.root||"alter";
 const cv=document.getElementById("cv"), cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
-const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f"};
+const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f"};
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
@@ -24,6 +24,18 @@ const tparents={}; const extra=[]; // extra = cross links (pedigree collapse)
 // subtree apart (GX inside a family, GX+GG between families), so lines run straight and never cross or pass behind a card.
 const PITCH=W+GX;
 function lay(id){
+  // Alter's mother (Tarim line, Nov 8 evening): she sits right beside his father (father stays directly above Alter);
+  // her own line goes up from her card and runs out past the father's tree in the lane just above her row.
+  if(id===ROOT){ const u0=UP[id]||[], ps0=tparents[id]||[];
+    if(u0[0]&&u0[1]&&ps0.includes(u0[0])&&ps0.includes(u0[1])){
+      const cF=lay(u0[0]), cM=lay(u0[1]); const offM=Math.min(-PITCH, cF.l[0]-GX-cM.r[0]); let dl=0;
+      for(let d=1;d<Math.min(cF.l.length,cM.r.length);d++) dl=Math.min(dl, cF.l[d]-(GX+GG)-cM.r[d]-offM);
+      N[u0[1]].po=(N[u0[1]].po||[]).map(([p,o])=>[p,o+dl]); N[u0[1]].lof=0.3;
+      N[id].sw=0; N[id].po=[[u0[1],offM],[u0[0],0]];
+      const res={l:[-W/2],r:[W/2]}; const L=Math.max(cF.l.length,cM.l.length);
+      for(let d=0;d<L;d++){ const sh=d===0?offM:offM+dl; const fl=cF.l[d], ml=cM.l[d], fr=cF.r[d], mr=cM.r[d];
+        res.l.push(Math.min(fl==null?1e12:fl, ml==null?1e12:ml+sh)); res.r.push(Math.max(fr==null?-1e12:fr, mr==null?-1e12:mr+sh)); }
+      return res; } }
   const ps=tparents[id]||[]; const u=UP[id]||[]; const ns=(sibsOf[id]||[]).length;
   const own={l:[-W/2-(u[1]===id?0:0)], r:[W/2]};
   // siblings sit beside the anchor, on the side away from its spouse: extend the anchor's own contour
@@ -149,7 +161,7 @@ function draw(){
   cx.setTransform(dpr*s,0,0,dpr*s,dpr*tx,dpr*ty);
   // connectors: child top -> mid-gap -> across -> up to the parent; family colour of the parent; the tapped card's links bold
   const gapTop=RH-H, rad=16, lw=Math.max(2.2,1.2/s);
-  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop/2; cx.strokeStyle=bc(p); cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
+  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop*(n.lof||0.5); cx.strokeStyle=bc(p); cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
     if(Math.abs(q.x-n.x)<1) cx.lineTo(q.x,yb);
     else { const sg=q.x>n.x?1:-1, r=Math.min(rad,Math.abs(q.x-n.x)/2); cx.lineTo(n.x,lane+r); cx.quadraticCurveTo(n.x,lane,n.x+sg*r,lane); cx.lineTo(q.x-sg*r,lane); cx.quadraticCurveTo(q.x,lane,q.x,lane-r); cx.lineTo(q.x,yb); }
     cx.stroke(); };
