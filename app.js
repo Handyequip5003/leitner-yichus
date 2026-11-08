@@ -47,13 +47,13 @@ function cardHTML(id){
   const p=P[id], m=p.m||"inf", med=p.media||[];
   const por=med.find(x=>x.k==="portrait"); const rest=med.filter(x=>x!==por);
   let h=`<div class="mk ${m}" title="${esc(MK[m][1])}">${MK[m][0]}</div>`;
-  if(por) h+=`<img class="pt" loading="lazy" src="${esc(por.f.replace(/\.jpg$/,"_t.jpg"))}" alt="">`;
+  if(por) h+=`<img class="pt" loading="lazy" src="${esc(por.f)}" alt="">`;
   h+=`<div class="nm">${esc(p.n)}</div>`;
   if(p.t) h+=`<div class="ti">${esc(p.t)}</div>`;
   if(p.pl) h+=`<div class="pl">${esc(p.pl)}</div>`;
   if(p.d) h+=`<div class="dt">${esc(p.d)}</div>`;
   if(p.s) h+=`<div class="sf"><b>ספרים:</b> ${esc(p.s)}</div>`;
-  if(rest.length){ h+=`<div class="th">`+rest.slice(0,4).map(x=>`<img loading="lazy" src="${esc(x.f.replace(/\.jpg$/,"_t.jpg"))}" alt="">`).join("")+(rest.length>4?`<span>+${rest.length-4}</span>`:"")+`</div>`; }
+  if(rest.length){ h+=`<div class="th">`+rest.slice(0,4).map(x=>`<img loading="lazy" src="${esc(x.f)}" alt="">`).join("")+(rest.length>4?`<span>+${rest.length-4}</span>`:"")+`</div>`; }
   return h;
 }
 const el={};
@@ -194,7 +194,7 @@ function openPanel(id){ const p=P[id]; if(!p) return; if(sel) el[sel]&&el[sel].c
   if(p.x) h+=`<div class="x">${esc(p.x)}</div>`;
   if(p.src) h+=`<div class="src"><b>מקור</b>${esc(p.src)}</div>`;
   if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t)} ↗</a>`).join("")+`</div>`;
-  const med=p.media||[]; if(med.length) h+=`<div class="gal">`+med.map((x,i)=>`<figure data-i="${i}"><img loading="lazy" src="${esc(x.f.replace(/\.jpg$/,"_t.jpg"))}" alt=""><figcaption>${esc(x.cap)}</figcaption></figure>`).join("")+`</div>`;
+  const med=p.media||[]; if(med.length) h+=`<div class="gal">`+med.map((x,i)=>`<figure data-i="${i}"><img loading="lazy" src="${esc(x.f)}" alt=""><figcaption>${esc(x.cap)}</figcaption></figure>`).join("")+`</div>`;
   const pb=document.getElementById("pB"); pb.innerHTML=h; const pn=document.getElementById("panel"); pn.hidden=false; pn.scrollTop=0;
   pb.querySelectorAll("[data-go]").forEach(a=>a.onclick=()=>{ const t=a.dataset.go; openPanel(t); focusEl(el[t]); });
   pb.querySelectorAll(".gal figure").forEach(f=>f.onclick=()=>openLB(id,+f.dataset.i));
