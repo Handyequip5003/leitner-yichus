@@ -164,7 +164,7 @@ document.getElementById("home").onclick=()=>{ const n=N[ROOT]; const ns=Math.min
 const DET={}; const nch=D.nch||32;
 function bucket(id){ let h=5381; for(let i=0;i<id.length;i++) h=(Math.imul(h,33)+id.charCodeAt(i))>>>0; return h%nch; }
 function details(id){ const p=P[id]; if(p.x!==undefined||p.src!==undefined||p.media) return Promise.resolve(p);
-  const b=bucket(id); if(!DET[b]) DET[b]=fetch(AB+"d/"+String(b).padStart(2,"0")+".json").then(r=>r.json()).catch(()=>({}));
+  const b=bucket(id); if(!DET[b]) DET[b]=fetch(AB+"d/"+String(b).padStart(2,"0")+".json?v="+(window.YV||"")).then(r=>r.json()).catch(()=>({}));
   return DET[b].then(c=>Object.assign({},p,c[id]||{})); }
 const sheet=document.getElementById("sheet"), sb=document.getElementById("sb");
 const nameLink=id=>P[id]?`<a href="#" data-go="${esc(id)}">${esc(P[id].n)}</a>`:"";
