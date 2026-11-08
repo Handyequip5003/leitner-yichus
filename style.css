@@ -96,3 +96,5 @@ background:linear-gradient(rgba(244,236,218,.97),rgba(244,236,218,.85));border-b
 .p.inh .nm::after{content:" ·";color:#a33}
 
 details.mas{margin:.5em 0;border-top:1px solid #d9c9a0;padding-top:.4em}details.mas summary{cursor:pointer;padding:.3em 0}details.mas .src{margin:.35em 0}
+
+.x{white-space:pre-line}
