@@ -642,7 +642,8 @@ window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};
     close(); pn.hidden=true; if(gear) gear.classList.remove("on");
     if(typeof N!=="undefined"&&N[id]) focus(id,Math.max(s,0.75)); openSheet(id); });
   bt.onclick=()=>{ ov.hidden=false; if(E){ rows(); return; }
-    fetch(AB+"yz.json?v="+(window.YV||"")).then(r=>r.json()).then(j=>{ E=(j&&j.e)||[]; rows(); })
+    const gj=u=>fetch(u+"yz.json?v="+(window.YV||"")).then(r=>{ if(!r.ok) throw 0; return r.json(); });
+    gj("").catch(()=>AB?gj(AB):Promise.reject()).then(j=>{ E=(j&&j.e)||[]; rows(); })
       .catch(()=>{ document.getElementById("yzl").innerHTML='<p class="yzm">די ליסטע האט זיך נישט געלאָדט. פרובירט נאכאמאל (מען דארף אינטערנעט).</p>'; }); };
   window.__yz={HF,FX,RD,open:()=>bt.onclick()};
 })();
