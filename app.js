@@ -33,6 +33,11 @@ const BRC={L:"#6d4321",W:"#1b6e2a",R:"#e65c00",M:"#6a1b9a",T:"#c62828",H:"#7cb34
   while(st.length){ const id=st.pop(); if(seen.has(id)||!P[id]||P[id].br!=="N") continue; seen.add(id); P[id].br="X"; for(const u of (UP[id]||[])) if(u) st.push(u); }
   for(const id in P){ const q=P[id]; if(q.br==="N"&&q.sibof&&seen.has(q.sibof)) q.br="X"; } })();
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
+/* LINECOLORS_V1 (Alter 10:04 PM Nov 8: "change the married simple and double line to the color of the team they belong"): lines take the family colour;
+   a light family colour is darkened a little for lines only, so it stays visible on the parchment. */
+const LCC={}; const lcol=h=>{ if(LCC[h]) return LCC[h]; const c=[1,3,5].map(i=>parseInt(h.substr(i,2),16)); const lum=(0.2126*c[0]+0.7152*c[1]+0.0722*c[2])/255;
+  const k=lum>0.42?0.62:lum>0.3?0.8:1; return LCC[h]="#"+c.map(v=>Math.round(v*k).toString(16).padStart(2,"0")).join(""); };
+const lc=id=>lcol(bc(id));
 const TINT={}; (function(){ const bg=[255,250,240]; for(const k in BRC){ const h=BRC[k], c=[1,3,5].map(i=>parseInt(h.substr(i,2),16)), a=k==="G"||k==="V"?0.16:0.22;
   TINT[k]="rgb("+c.map((v,i)=>Math.round(bg[i]*(1-a)+v*a)).join(",")+")"; } })();
 const tint=id=>TINT[(P[id]&&P[id].br)||"L"]||TINT.L;
@@ -113,7 +118,7 @@ const FAM=D.fam||null, KIDS=[]; let minDep=0;
 if(FAM&&N[ROOT]){ const a=N[ROOT]; const sp=FAM.sp&&P[FAM.sp]?FAM.sp:null; if(sp){ if(N[sp]&&N[sp].po&&N[sp].po.length){ N[sp].spof=ROOT; N[sp].x=a.x-PITCH; N[sp].y=a.y; } else N[sp]={x:a.x-PITCH,y:a.y,dep:0,spof:ROOT,po:[]}; }
   const ks=(FAM.kids||[]).filter(k=>P[k]); const mx=sp?a.x-PITCH/2:a.x;
   ks.forEach((k,i)=>{ N[k]={x:mx+(i-(ks.length-1)/2)*PITCH,y:a.y+RH,dep:-1,po:[],kid:1}; KIDS.push(k); }); if(ks.length) minDep=-1; }
-const ids=Object.keys(N); const rows={}; let maxDep=0;
+const ids=Object.keys(N); const rows={}; let maxDep=0; for(const id of ids) N[id].id=id;  // LINECOLORS_V1: a node knows its card
 for(const id of ids){ const n=N[id]; (rows[n.dep]=rows[n.dep]||[]).push(id); if(n.dep>maxDep) maxDep=n.dep; }
 for(const d in rows) rows[d].sort((a,b)=>N[a].x-N[b].x);
 let minX=1e9,maxX=-1e9; for(const id of ids){ minX=Math.min(minX,N[id].x-W/2); maxX=Math.max(maxX,N[id].x+W/2); }
@@ -148,13 +153,18 @@ function rowClear(d,xa,xb,a,b){ const row=rows[d]; if(!row) return true; let lo=
   const findT=(key,xa,xb)=>{ for(let t=0;t<9;t++) if(trackFree(key,t,Math.min(xa,xb),Math.max(xa,xb))) return t; return -1; };
   const colFree=(x,ya,yb)=>{ const y0_=Math.min(ya,yb), y1_=Math.max(ya,yb); for(const c of COLS) if(Math.abs(c[0]-x)<7&&y0_<c[2]+10&&y1_>c[1]-10) return false; return true; };
   const ord=extra.map((e,k)=>k).filter(k=>N[extra[k][0]]&&N[extra[k][1]]).sort((i,j)=>{ const A=extra[i],B=extra[j]; return Math.abs(N[A[1]].x-N[A[0]].x)-Math.abs(N[B[1]].x-N[B[0]].x); });
-  for(const k of ord){ const [c,p]=extra[k]; const n=N[c], q=N[p]; const dc=n.dep, dp=q.dep;
+  const COUP={}; { const MK={}; for(const r of MAR) if(!r.stub) MK[r.f+'|'+r.m]=r;  // REROUTE1_V1: child of a side-by-side couple, both drawn elsewhere -> one line into the marriage line
+    for(const c in UP){ const u=UP[c]||[]; const f=u[0], m=u[1]; if(!f||!m||!N[f]||!N[m]||!N[c]||N[c].sibof||N[c].kid||N[c].spof||(tparents[c]||[]).length) continue;
+      const r=MK[f+'|'+m]; if(r) COUP[c]={x:(r.xa+r.xb)/2,y:r.y,f,m}; } }
+  const FIRSTP={}, ANCH=[];  // REROUTE1B: a second parent's link starts beside the first parent, never at the child's card
+  for(const k of ord){ const [c,p]=extra[k]; const cp=COUP[c]; if(cp&&p!==cp.f) continue; const n=N[c], q=N[p]; const dc=n.dep, dp=q.dep;
     const mx=MIX[c]&&MIX[c].o===p?MIX[c]:null; if(!mx&&MARC[c]&&(UP[c]||[]).includes(p)) continue;  // the marriage line already joins them
-    const side=q.x>=(mx?mx.jx:n.x)?1:-1; const u=used[c]||0; const sx=mx?mx.jx:n.x+side*(40+u*30), sy0=mx?mx.jy:n.y;
-    const ip=intoP[p]||0; const ex=q.x-side*(26+ip*16);   // enter the parent's bottom beside its own line
+    if(!mx&&!cp&&FIRSTP[c]&&FIRSTP[c]!==p){ ANCH.push({c,p,a:FIRSTP[c]}); continue; }  // REROUTE1B
+    const side=(cp?cp.x:q.x)>=(mx?mx.jx:n.x)?1:-1; const u=used[c]||0; const sx=mx?mx.jx:n.x+side*(40+u*30), sy0=mx?mx.jy:n.y;
+    const ip=intoP[p]||0; const ex=cp?cp.x:q.x-side*(26+ip*16); const ey=cp?cp.y:q.y+H;   // enter the parent's bottom beside its own line
     let pts=null, tk=[];
-    if(Math.abs(ex-sx)>STUBX){ STUBS.push({c,p}); continue; }
-    if(dp===dc+1){ const key='g'+dc+'B'; const t=findT(key,sx,ex); if(t>=0){ const ly=q.y+H+58+t*5.5; if(colFree(sx,sy0,ly)){ pts=[[sx,sy0],[sx,ly],[ex,ly],[ex,q.y+H]]; tk=[[key,t,sx,ex]]; } } }
+    if(Math.abs(ex-sx)>STUBX){ if(mx) ANCH.push({c,p,a:mx.t}); else { STUBS.push({c,p,cp}); FIRSTP[c]=FIRSTP[c]||p; } continue; }
+    if(dp===dc+1){ const key='g'+dc+'B'; const t=findT(key,sx,ex); if(t>=0){ const ly=q.y+H+58+t*5.5; if(colFree(sx,sy0,ly)){ pts=[[sx,sy0],[sx,ly],[ex,ly],[ex,ey]]; tk=[[key,t,sx,ex]]; } } }
     else { const dlo=dp>dc?dc+1:dp, dhi=dp>dc?dp-1:dc; const kA='g'+dc+'A', kB='g'+(dp-1)+'B';
       const lo=Math.min(sx,ex)-PITCH*3, hi=Math.max(sx,ex)+PITCH*3; const cand=[ex,sx];
       for(let d=dlo;d<=dhi;d++){ const row=rows[d]; if(!row) continue; let i0=0,i1=row.length; while(i0<i1){ const m=(i0+i1)>>1; if(N[row[m]].x<lo-W) i0=m+1; else i1=m; }
@@ -163,14 +173,15 @@ function rowClear(d,xa,xb,a,b){ const row=rows[d]; if(!row) return true; let lo=
       for(const xv of cand){ if(xv<lo||xv>hi) continue; if(!freeAt(xv,dlo,dhi)) continue;
         const tA=findT(kA,sx,xv), tB=findT(kB,xv,ex); if(tA<0||tB<0) continue;
         const l1=n.y-58-tA*5.5, l2=q.y+H+58+tB*5.5; if(!colFree(xv,l1,l2)) continue;
-        pts=[[sx,sy0],[sx,l1],[xv,l1],[xv,l2],[ex,l2],[ex,q.y+H]]; tk=[[kA,tA,sx,xv],[kB,tB,xv,ex]]; COLS.push([xv,Math.min(l1,l2),Math.max(l1,l2)]); break; } }
-    if(!pts){ STUBS.push({c,p}); continue; }
-    used[c]=u+1; intoP[p]=ip+1; for(const [key,t,xa,xb] of tk) take(key,t,Math.min(xa,xb),Math.max(xa,xb));
+        pts=[[sx,sy0],[sx,l1],[xv,l1],[xv,l2],[ex,l2],[ex,ey]]; tk=[[kA,tA,sx,xv],[kB,tB,xv,ex]]; COLS.push([xv,Math.min(l1,l2),Math.max(l1,l2)]); break; } }
+    if(!pts){ if(mx) ANCH.push({c,p,a:mx.t}); else { STUBS.push({c,p,cp}); FIRSTP[c]=FIRSTP[c]||p; } continue; }
+    used[c]=u+1; if(!cp) intoP[p]=ip+1; FIRSTP[c]=FIRSTP[c]||p; for(const [key,t,xa,xb] of tk) take(key,t,Math.min(xa,xb),Math.max(xa,xb));
     let x0=1e18,x1=-1e18,y0=1e18,y1=-1e18; for(const [x,y] of pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }
     XR.push({c,p,pts,x0,x1,y0,y1,mix:mx?1:0}); }
   // place each stub on the child's top edge where no line leaves the card
+  for(const z of ANCH) if(N[z.a]&&N[z.p]) STUBS.push({c:z.c,p:z.p,a:z.a});  // REROUTE1B: stub sits on the first parent's card
   const occ={}; for(const r of XR){ if(r.mix) continue; (occ[r.c]=occ[r.c]||[]).push(r.pts[0][0]-N[r.c].x); }
-  for(const t of STUBS){ const n=N[t.c]; const o=(occ[t.c]=occ[t.c]||[]); if(n.po&&n.po.length) o.push(0);
+  for(const t of STUBS){ const ak=t.a||t.c, n=N[ak]; const o=(occ[ak]=occ[ak]||[]); if(n.po&&n.po.length) o.push(0);
     const w=140; let best=null; for(const cxo of [-82,82,-45,45,0]){ if(o.some(x=>Math.abs(x-cxo)<w/2+10)) continue; best=cxo; break; }
     if(best==null) best=-82; t.x=n.x+best; t.w=w; t.h=42; t.y=n.y-50; o.push(best-w/2+8,best,best+w/2-8); }
   for(const id in N){ const n=N[id]; if(!n.sibof) continue; const a_=N[n.sibof]; if(!a_) continue;
@@ -186,9 +197,9 @@ const SEE_COLOR="#B07A0E"; const SEEL=[]; let SEESEL=null;
   const free=(d,t,a,b)=>{ const L=TRK[d+'|'+t]; if(!L) return true; for(const [u,v] of L) if(a<v+40&&b>u-40) return false; return true; };
   const pick=(d,a,b)=>{ const lo=Math.min(a,b), hi=Math.max(a,b); let t=0; for(;t<8;t++) if(free(d,t,lo,hi)) break; if(t===8) t=SEEL.length%8; (TRK[d+'|'+t]=TRK[d+'|'+t]||[]).push([lo,hi]); return t; };
   const col=(xa,dlo,dhi)=>{ if(freeAt(xa,dlo,dhi)) return xa; for(let k=1;k<300;k++) for(const sg of [1,-1]){ const x=xa+sg*k*12; if(freeAt(x,dlo,dhi)) return x; } return xa; };
-  for(const t of STUBS){ const n=N[t.c], q=N[t.p]; if(!n||!q||t.x==null) continue; const dc=n.dep, dp=q.dep;
+  for(const t of STUBS){ const n=N[t.a||t.c], q=N[t.p]; if(!n||!q||t.x==null) continue; const dc=n.dep, dp=q.dep;  // REROUTE1B: t.a
     t.lab=dp>dc?"זעה אויבן ⟵":dp===dc?"זעה אויף דער זייט ⟵":"זעה אונטן ⟵";
-    const sx=t.x, sy=t.y, up=dp>dc, sg=q.x>sx?-1:1, ex=q.x+sg*62, ey=up?q.y+H:q.y;
+    const sx=t.x, sy=t.y, up=dp>dc, sg=q.x>sx?-1:1, ex=t.cp&&up?t.cp.x:q.x+sg*62, ey=up?q.y+H:q.y;  // REROUTE1_V1: a couple's stub points into the middle of the couple
     const dA=dc, dB=up?dp-1:dp; let pts;   // gap above the child's row -> gap beside the parent (under it when higher, over it otherwise)
     if(dA===dB){ const y=hw(dA,pick(dA,sx,ex)); pts=[[sx,sy],[sx,y],[ex,y],[ex,ey]]; }
     else { const xv=col(ex+sg*(W/2+XM+40),Math.min(dA,dB)+1,Math.max(dA,dB)); const ya=hw(dA,pick(dA,sx,xv)), yb=hw(dB,pick(dB,xv,ex));
@@ -287,7 +298,7 @@ function draw(){
   cx.setTransform(dpr*s,0,0,dpr*s,dpr*tx,dpr*ty);
   // connectors: child top -> mid-gap -> across -> up to the parent; family colour of the parent; the tapped card's links bold
   const gapTop=RH-H, rad=16, lw=Math.max(2.2,1.2/s), mo=Math.min(11,Math.max(4.5,2.4/s));
-  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop*(n.lof||0.5); cx.strokeStyle=bc(p); cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
+  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop*(n.lof||0.5); cx.strokeStyle=n.id?lc(n.id):lc(p);  // LINECOLORS_V1: the child's family colour cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
     if(Math.abs(q.x-n.x)<1) cx.lineTo(q.x,yb);
     else { const sg=q.x>n.x?1:-1, r=Math.min(rad,Math.abs(q.x-n.x)/2); cx.lineTo(n.x,lane+r); cx.quadraticCurveTo(n.x,lane,n.x+sg*r,lane); cx.lineTo(q.x-sg*r,lane); cx.quadraticCurveTo(q.x,lane,q.x,lane-r); cx.lineTo(q.x,yb); }
     cx.stroke(); };
@@ -297,7 +308,8 @@ function draw(){
     cx.beginPath(); cx.arc(x-o,y,r,0,7); cx.fill(); cx.beginPath(); cx.arc(x+o,y,r,0,7); cx.fill(); cx.beginPath(); cx.arc(x-o,y,r,0,7); cx.stroke(); cx.beginPath(); cx.arc(x+o,y,r,0,7); cx.stroke(); };
   const marLines=(only)=>{ const lod_=s*W; cx.strokeStyle=C.gold;
     for(const g of MAR){ if(only&&g.f!==only&&g.m!==only) continue; if(g.xb<x0-40||g.xa>x1+40||g.y<y0-H||g.y>y1+H) continue;
-      cx.strokeStyle=C.mar; cx.lineWidth=(only?2.2:1)*Math.max(2,lw*0.9); cx.beginPath(); cx.moveTo(g.xa,g.y-mo); cx.lineTo(g.xb,g.y-mo); cx.moveTo(g.xa,g.y+mo); cx.lineTo(g.xb,g.y+mo); cx.stroke();
+      { const F=N[g.f], M=N[g.m], cf=lc(g.f), cm=lc(g.m); if(cf===cm||!F||!M) cx.strokeStyle=cf; else { const gr=cx.createLinearGradient(g.xa,0,g.xb,0); const fl=F.x<=M.x; gr.addColorStop(0,fl?cf:cm); gr.addColorStop(1,fl?cm:cf); cx.strokeStyle=gr; } }  // LINECOLORS_V1: his colour blending into hers
+      cx.lineWidth=(only?2.2:1)*Math.max(2,lw*0.9); cx.beginPath(); cx.moveTo(g.xa,g.y-mo); cx.lineTo(g.xb,g.y-mo); cx.moveTo(g.xa,g.y+mo); cx.lineTo(g.xb,g.y+mo); cx.stroke();
       if(lod_<22) continue; const L=g.xb-g.xa;
       if(g.stub){ ring((g.xa+g.xb)/2,g.y); continue; }
       ring((g.xa+g.xb)/2,g.y); if(L>900){ ring(g.xa+70,g.y); ring(g.xb-70,g.y); }
@@ -309,7 +321,7 @@ function draw(){
       const mc=MARC[id]; if(mc){ if(Math.max(mc.x,n.x)<x0-W||Math.min(mc.x,n.x)>x1+W) continue; link(n,{x:mc.x,y:mc.y+mo-H},mc.f,false); continue; }
       for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue; link(n,q,p,false); } } }
   // further lines of descent into the one card (each person once) + sibling brackets
-  for(const r of XR){ if(r.x1<x0-W||r.x0>x1+W||r.y1<y0-H||r.y0>y1+H) continue; cx.strokeStyle=bc(r.p); cx.lineWidth=lw; poly(r.pts,rad); }
+  for(const r of XR){ if(r.x1<x0-W||r.x0>x1+W||r.y1<y0-H||r.y0>y1+H) continue; cx.strokeStyle=lc(r.c); cx.lineWidth=lw; poly(r.pts,rad); }  // LINECOLORS_V1
   seeDraw(x0,x1,y0,y1,lw,false);  // SEEABOVE_V1
   for(const [sb,an] of SIBL){ const n2=N[sb],a3=N[an]; if(Math.max(n2.x,a3.x)<x0-W||Math.min(n2.x,a3.x)>x1+W) continue; cx.strokeStyle=bc(an); cx.lineWidth=lw*0.8; cx.setLineDash([2,0]); poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); }
   marLines(false);
@@ -318,7 +330,7 @@ function draw(){
   if(sel&&N[sel]){ const n=N[sel]; const up1=cid=>{ const cn=N[cid], mc=MARC[cid]; if(mc) link(cn,{x:mc.x,y:mc.y+mo-H},mc.f,true); else for(const [p] of cn.po||[]) link(cn,N[p],p,true); };
     up1(sel); if(n.ch&&N[n.ch]){ if(MARC[n.ch]) up1(n.ch); else link(N[n.ch],n,sel,true); } marLines(sel);
     for(const k of KIDS) if(sel===k||sel===ROOT||(FAM&&sel===FAM.sp)) kidLink(k,true);
-    for(const r of XR){ if(r.c===sel||r.p===sel){ cx.strokeStyle=bc(r.p); cx.lineWidth=lw*2.4; poly(r.pts,rad); } }
+    for(const r of XR){ if(r.c===sel||r.p===sel){ cx.strokeStyle=lc(r.c); cx.lineWidth=lw*2.4; poly(r.pts,rad); } }
     for(const [sb,an] of SIBL){ if(sb===sel||an===sel){ const n2=N[sb],a3=N[an]; cx.strokeStyle=bc(an); cx.lineWidth=lw*1.8; poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); } } }
   seeDraw(x0,x1,y0,y1,lw,true);  // SEEABOVE_V1: the tapped card's "see above" lines, bold
   const lod=s*W; let drawn=0; sprUse++; sprMiss=0; sprT=performance.now()+(ptr.size||anim?7:14);
