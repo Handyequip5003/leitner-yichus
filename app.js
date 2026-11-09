@@ -461,7 +461,7 @@ function head(id,p){ const m=p.m||"unv"; return (!N[id]&&P[id]&&P[id].sibof?`<p 
 function body(id,p){ let h=""; const u=UP[id]||[];
   const ms=(p.media||[]).length?p.media.map(x=>({f:x.f,cap:x.cap,cr:x.cr,u:x.u})):[]; curMed=ms;
   const NP=new Set(((LN&&LN.ids[id]&&LN.ids[id].p)||[])); const isNP=f=>wnOn&&(NP.has(f)||NP.has(String(f).replace(/^m\//,"").replace(/\.jpg$/,"")));
-  if(ms.length) h+=`<div class="gal">`+ms.map((x,i)=>`<figure data-i="${i}" class="${isNP(x.f)?"nw":""}">${isNP(x.f)?'<span class="nwb">נייַ</span>':""}<img loading="lazy" decoding="async" src="${esc(SRC(x.f,"t"))}" alt=""><figcaption>${esc(x.cap||"")}</figcaption></figure>`).join("")+`</div><div class="gn">${ms.length>1?ms.length+" בילדער · ":""}טאפ פאר פולער גרייס</div>`;
+  if(ms.length) h+=`<div class="gal">`+ms.map((x,i)=>`<figure data-i="${i}" class="${isNP(x.f)?"nw":""}">${isNP(x.f)?'<span class="nwb">נייַ</span>':""}<img loading="lazy" decoding="async" src="${esc(SRC(x.f,"t"))}" alt=""><figcaption>${esc(x.cap||"")}</figcaption></figure>`).join("")+`</div>${ms.length>1?`<div class="gn">${ms.length} בילדער</div>`:""}`;
   h+=`<div class="fam">`; if(u[0]&&P[u[0]]) h+=`<div><b>טאטע</b><span>${nameLink(u[0])}</span></div>`; if(u[1]&&P[u[1]]) h+=`<div><b>מאמע</b><span>${nameLink(u[1])}</span></div>`;
   const ks=(kids[id]||[]).filter(c=>P[c]); if(ks.length) h+=`<div><b>קינדער</b><span>${ks.map(nameLink).join(" · ")}</span></div>`;
   const sp=[]; for(const c of ks){ const cu=UP[c]||[]; const o=cu[0]===id?cu[1]:cu[0]; if(o&&P[o]&&!sp.includes(o)) sp.push(o); } if(sp.length) h+=`<div><b>זיווג</b><span>${sp.map(nameLink).join(" · ")}</span></div>`;
