@@ -583,3 +583,67 @@ home(); loop();
   if(z&&z[0]==="z") details(id).then(()=>setTimeout(()=>openZoom(+z.slice(1)||0),120)); })();
 if(document.fonts&&document.fonts.load){ document.fonts.load(FN).then(()=>{ for(const k in TX) delete TX[k]; SPR.clear(); sprBytes=0; dirty=true; sprWarm(); }); }
 window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};
+
+/* YAHRZEIT_V1 (Alter 12:36 PM Nov 9 "I should see in setting evrey yortzeit"): ⚙ → "יאָרצייטן" — every yahrzeit on the site (yz.json, built by yahrzeit_patch.py --index), upcoming first from today's Hebrew date */
+(function(){
+  const pn=document.getElementById("setp"), gear=document.getElementById("gear"); if(!pn||document.getElementById("yzb")) return;
+  /* Hebrew calendar (Reingold/Dershowitz), days counted as RD */
+  const EP=-1373427, lp=y=>((7*y+1)%19)<7;
+  const el=y=>{ const m=Math.floor((235*y-234)/19), pa=12084+13753*m; let d=m*29+Math.floor(pa/25920); if((3*(d+1))%7<3) d++; return d; };
+  const dl=y=>{ const a=el(y-1), b=el(y), c=el(y+1); return c-b===356?2:(b-a===382?1:0); };
+  const NY=y=>EP+el(y)+dl(y), DY=y=>NY(y+1)-NY(y);
+  const LD=(m,y)=>([2,4,6,10,13].includes(m)||(m===12&&!lp(y))||(m===8&&![355,385].includes(DY(y)))||(m===9&&[353,383].includes(DY(y))))?29:30;
+  const LM=y=>lp(y)?13:12;
+  const FX=(y,m,d)=>{ let r=NY(y)+d-1; if(m<7){ for(let i=7;i<=LM(y);i++) r+=LD(i,y); for(let i=1;i<m;i++) r+=LD(i,y); } else { for(let i=7;i<m;i++) r+=LD(i,y); } return r; };
+  const HF=rd=>{ let y=Math.floor((rd-EP)/(35975351/98496)); while(NY(y+1)<=rd) y++; while(NY(y)>rd) y--; let m=rd<FX(y,1,1)?7:1; while(rd>FX(y,m,LD(m,y))) m++; return [y,m,rd-FX(y,m,1)+1]; };
+  const RD=dt=>Math.floor(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())/864e5)+719163;
+  const HN=n=>{ let o=""; for(const [v,c] of [[400,"ת"],[300,"ש"],[200,"ר"],[100,"ק"],[90,"צ"],[80,"פ"],[70,"ע"],[60,"ס"],[50,"נ"],[40,"מ"],[30,"ל"],[20,"כ"],[10,"י"],[9,"ט"],[8,"ח"],[7,"ז"],[6,"ו"],[5,"ה"],[4,"ד"],[3,"ג"],[2,"ב"],[1,"א"]]) while(n>=v){ o+=c; n-=v; }
+    o=o.replace(/יה$/,"טו").replace(/יו$/,"טז"); return o.length===1?o+"'":o.slice(0,-1)+'"'+o.slice(-1); };
+  const MN={1:"ניסן",2:"אייר",3:"סיון",4:"תמוז",5:"אב",6:"אלול",7:"תשרי",8:"חשון",9:"כסלו",10:"טבת",11:"שבט",12:"אדר",13:"אדר ב'"};
+  const mnY=(m,y)=>m===12&&lp(y)?"אדר א'":MN[m];
+  const LIV=/שליט["״]א|(^|[^א-ת])נ["״]י([^א-ת]|$)|שיחי|שתחי|לאוי["״]ט/;
+  /* the month this yahrzeit falls in, in Hebrew year y. Plain Adar in a leap year → אדר א' (רמ"א; many keep אדר ב' too); recorded אדר א'/ב' in a plain year → אדר */
+  const mOf=(e,y)=>{ if(e.m===13) return lp(y)?13:12; return e.m; };
+  const occ=(e,y)=>{ const m=mOf(e,y); return FX(y,m,Math.min(e.d,LD(m,y))); };
+  const recLab=e=>HN(e.d)+" "+(e.m===13?"אדר ב'":e.a===11?"אדר א'":MN[e.m]);
+  const bt=document.createElement("button"); bt.id="yzb"; bt.type="button"; bt.innerHTML='<span>🕯️ יאָרצייטן</span><small>אלע יאָרצייטן פון אלע קארטלעך, די נאָענטסטע צו ערשט</small>';
+  const st=pn.querySelector("#s_stats"); if(st) pn.insertBefore(bt,st); else pn.appendChild(bt);
+  const ov=document.createElement("div"); ov.id="yzp"; ov.hidden=true; ov.setAttribute("role","dialog"); ov.setAttribute("aria-label","יאָרצייטן");
+  ov.innerHTML='<div class="yzh"><b>יאָרצייטן</b><button id="yzx" aria-label="צומאכן">✕</button></div><div id="yzt"></div><input id="yzq" type="search" placeholder="זוך א נאָמען…" autocomplete="off"><label class="yzc"><input type="checkbox" id="yzcv" checked> ווייז אויך ≈ פון א ציווילער דאטע</label><div id="yzl"><p class="yzm">לאָדט…</p></div>';
+  document.body.appendChild(ov);
+  let E=null, built=false;
+  const T0=RD(new Date()), [TY,TM,TD]=HF(T0);
+  const close=()=>{ ov.hidden=true; };
+  document.getElementById("yzx").onclick=close;
+  document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&!ov.hidden) close(); });
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const nm=id=>String((P[id]&&P[id].n)||"");
+  function rows(){
+    const q=document.getElementById("yzq").value.trim(), cv=document.getElementById("yzcv").checked;
+    const L=[]; for(const e of E){ if(!P[e.i]||LIV.test(nm(e.i)+" "+(P[e.i].t||""))) continue; if(!cv&&/c/.test(e.f||"")) continue; if(q&&!nm(e.i).includes(q)) continue;
+      let y=TY, r=occ(e,y); if(r<T0){ y++; r=occ(e,y); } L.push({e,r,y,k:r-T0}); }
+    L.sort((a,b)=>a.k-b.k||nm(a.e.i).localeCompare(nm(b.e.i),"he"));
+    const fl=e=>{ const f=e.f||"", o=[]; if(f.includes("c")) o.push("≈ (פון דער ציווילער דאטע)"); else if(f.includes("a")) o.push("≈ (בערך)");
+      if(f.includes("x")) o.push("(עטלעכע דאטעס אויפן קארטל)"); if(f.includes("l")) o.push("(לויט דער לוויה)"); if(f.includes("n")) o.push("(פון די נאָטיצן)");
+      if(e.m===12&&e.a!==11&&lp(TY)) o.push("(אין א שנה מעוברת: אדר א\'; אסאך האלטן אויך אדר ב\')"); return o.join(" "); };
+    const when=k=>k===0?"היינט":k===1?"מאָרגן":"אין "+k+" טעג";
+    const row=o=>{ const e=o.e; return '<button class="yzr" data-id="'+esc(e.i)+'"><i style="background:'+bc(e.i)+'"></i><span class="yzd">'+recLab(e)+'</span><span class="yzn">'+esc(nm(e.i))+(e.y?' <small>'+HN(e.y%1000)+'</small>':'')+(fl(e)?'<small class="yzf">'+fl(e)+'</small>':'')+'</span><span class="yzw">'+(o.k<=30?when(o.k):"")+'</span></button>'; };
+    let h=""; const td=L.filter(o=>o.k===0), wk=L.filter(o=>o.k>0&&o.k<=7), rest=L.filter(o=>o.k>7);
+    if(!q){ h+='<h4 class="yzs">היינט</h4>'+(td.length?td.map(row).join(""):'<p class="yzm">היינט איז נישטא קיין יאָרצייט אויפן בוים</p>');
+      h+='<h4 class="yzs">די וואך <small>(די קומענדיגע 7 טעג)</small></h4>'+(wk.length?wk.map(row).join(""):'<p class="yzm">נישטא</p>'); }
+    let cur=""; for(const o of (q?L:rest)){ const [hy,hm]=HF(o.r); const g=mnY(hm,hy)+" "+HN(hy%1000); if(g!==cur){ cur=g; h+='<h4>'+g+'</h4>'; } h+=row(o); }
+    if(!L.length) h+='<p class="yzm">גארנישט געפונען</p>';
+    const np=new Set(L.map(o=>o.e.i)).size;
+    document.getElementById("yzt").innerHTML='היינט: <b>'+HN(TD)+" "+mnY(TM,TY)+" "+HN(TY%1000)+'</b> · '+L.length+' יאָרצייטן פון '+np+' מענטשן';
+    document.getElementById("yzl").innerHTML=h; }
+  document.getElementById("yzq").oninput=()=>{ if(E) rows(); };
+  document.getElementById("yzcv").onchange=()=>{ if(E) rows(); };
+  document.getElementById("yzl").addEventListener("click",ev=>{ const b=ev.target.closest(".yzr"); if(!b) return; const id=b.dataset.id; if(!P[id]) return;
+    close(); pn.hidden=true; if(gear) gear.classList.remove("on");
+    if(typeof N!=="undefined"&&N[id]) focus(id,Math.max(s,0.75)); openSheet(id); });
+  bt.onclick=()=>{ ov.hidden=false; if(E){ rows(); return; }
+    fetch(AB+"yz.json?v="+(window.YV||"")).then(r=>r.json()).then(j=>{ E=(j&&j.e)||[]; rows(); })
+      .catch(()=>{ document.getElementById("yzl").innerHTML='<p class="yzm">די ליסטע האט זיך נישט געלאָדט. פרובירט נאכאמאל (מען דארף אינטערנעט).</p>'; }); };
+  window.__yz={HF,FX,RD,open:()=>bt.onclick()};
+})();
+/* /YAHRZEIT_V1 */
