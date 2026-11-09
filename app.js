@@ -276,6 +276,7 @@ const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const po
     if(ok||f<0.53){ if(bl.length){ const sh=Math.max(0,(H-12)-lastb); for(const o of bl) o.yb+=sh; }
       for(const o of all) o.rx=rxAt(o.yb); R={L:all,fs:f,ok}; break; } }
   return TX[id]={L:R.L,fs:R.fs,ok:R.ok,rab,cr,por}; }
+/* LATESTPIC_V1 (Alter 2:43 PM Nov 9): the card front shows the latest dated picture of the person; order is set at build by latestpic_patch.py (publish2.py); all other pictures stay in the opened card */
 function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m.k||"x")[0],cap:m.cap,cr:m.cr,u:m.u}));
   return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
 function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
