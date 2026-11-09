@@ -514,7 +514,7 @@ let zI=0,zs=1,zx=0,zy=0,zb=1,iw=1,ih=1;
 function zApply(){ zi.style.transform=`translate3d(${zx}px,${zy}px,0) scale(${zs})`; }
 function zFit(){ const W_=innerWidth,H_=innerHeight; zb=Math.min(W_/iw,H_/ih); zs=zb; zx=(W_-iw*zs)/2; zy=(H_-ih*zs)/2; zApply(); }
 function openZoom(i){ zI=(i+curMed.length)%curMed.length; const m=curMed[zI]; zv.classList.add("on"); zv.setAttribute("aria-hidden","false");
-  document.getElementById("zc").textContent=(m.cap||"")+(m.cr?" — "+m.cr:""); document.getElementById("zn").textContent=curMed.length>1?(zI+1)+" / "+curMed.length:"";
+  document.getElementById("zc").textContent=(m.cap||"")+(m.cr?" — "+m.cr:""); document.getElementById("zn").textContent=curMed.length>1?(zI+1)+" / "+curMed.length:""; zv.classList.toggle("zmany",curMed.length>1);
   const t=SRC(m.f,"t"); zi.onload=null; zi.src=t; const go=()=>{ iw=zi.naturalWidth||1; ih=zi.naturalHeight||1; zFit(); }; if(zi.complete) go(); else zi.onload=go;
   const full=SRC(m.f,"z"); if(full!==t){ const im=new Image(); im.onload=()=>{ if(curMed[zI]!==m||!im.naturalWidth) return; const go2=()=>{ const f=iw/im.naturalWidth; iw=im.naturalWidth; ih=im.naturalHeight; zs*=f; zb*=f; zApply(); }; zi.onload=null; zi.src=full; if(zi.complete) go2(); else zi.onload=go2; }; im.src=full; } }
 function closeZoom(){ zv.classList.remove("on"); zv.setAttribute("aria-hidden","true"); }
@@ -539,6 +539,11 @@ document.getElementById("zx").onclick=closeZoom;
   zst.addEventListener("wheel",e=>{ e.preventDefault(); const ns=Math.max(zb,Math.min(zb*8,zs*Math.exp(-e.deltaY*0.002))); const wx=(e.clientX-zx)/zs, wy=(e.clientY-zy)/zs; zs=ns; zx=e.clientX-wx*zs; zy=e.clientY-wy*zs; zApply(); },{passive:false});
   addEventListener("resize",()=>{ if(zv.classList.contains("on")) zFit(); }); })();
 addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("on")) closeZoom(); else closeSheet(); } else if(zv.classList.contains("on")&&(e.key==="ArrowLeft"||e.key==="ArrowRight")) openZoom(zI+(e.key==="ArrowLeft"?1:-1)); });
+/* PICSGRID_V1: arrow buttons in the big view + wheel scrolls horizontal strips (Alter Nov 9) */
+(function(){ const mk=(id,t,lab,d)=>{ const b=document.createElement("button"); b.id=id; b.type="button"; b.className="znav"; b.textContent=t; b.setAttribute("aria-label",lab); b.onclick=ev=>{ ev.stopPropagation(); if(curMed.length>1) openZoom(zI+d); }; zv.appendChild(b); };
+  mk("znx","‹","קומענדיקע בילד",1); mk("znp","›","פריערדיקע בילד",-1);
+  document.addEventListener("wheel",e=>{ if(e.ctrlKey) return; let el=e.target; const d=(Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*(e.deltaMode===1?16:1); if(!d) return;
+    while(el&&el.nodeType===1&&el!==document.body){ if(el.scrollWidth>el.clientWidth+2){ const cs=getComputedStyle(el); const ox=cs.overflowX; if((ox==="auto"||ox==="scroll")&&el.scrollHeight<=el.clientHeight+2){ const rtl=cs.direction==="rtl"; const b0=el.scrollLeft; el.scrollLeft+=(rtl&&Math.abs(e.deltaX)<=Math.abs(e.deltaY))?-d:d; if(el.scrollLeft!==b0){ e.preventDefault(); return; } } } el=el.parentElement; } },{passive:false}); })();
 /* what's new controls */
 (function(){ const bt=document.getElementById("wn"), bar=document.getElementById("wnb"), t=document.getElementById("wnt");
   if(!LN||!NEWS.length) return; bt.hidden=false; const ni=LN.n_items||NEWS.length; document.getElementById("wnc").textContent=ni;
