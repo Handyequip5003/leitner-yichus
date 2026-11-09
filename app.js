@@ -23,8 +23,25 @@ const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(lo
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"); let cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:MARRIAGE_COLOR,lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
-const BRC={B:"#9c2f6e",L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78",N:"#b07d0e",Z:"#6a1b9a"};
+/* FAMCOLORS_V1 (Alter 8:35 PM Nov 8 "Make all familys a complete other color and a light backround of there color ... if there is 1 for 2 family make half and half blanded in").
+   One clearly different colour per family (maroon #7B2D3A = marriage lines and amber #B07A0E = "זעה אויבן" stay reserved).
+   L לייטנער brown · W וואגשאהל forest green · R רובין orange · M מייזליש purple · T טייטלבוים red · H האלבערשטאם lime · S שפירא blue · Y מאיער olive
+   K טארים teal · V וויינבערגער slate · G שווארץ charcoal · B ראבינאוויטש raspberry · Z קרישעווסקי orchid · N מענדלאוויטש indigo · X ווייס sky blue */
+const BRC={L:"#6d4321",W:"#1b6e2a",R:"#e65c00",M:"#6a1b9a",T:"#c62828",H:"#7cb342",S:"#1565c0",Y:"#9e9d24",K:"#00897b",V:"#78909c",G:"#2b2b2b",B:"#d81b60",Z:"#ba68c8",N:"#283593",X:"#29b6f6"};
+/* ווייס (the שוויגער's mother's side) was drawn with the מענדלאוויטש letter: give מרים ווייס and her own line up their own family X */
+(function weissFam(){ const w0="weiss_miriam"; if(!P[w0]||P[w0].br!=="N") return; const seen=new Set(), st=[w0];
+  while(st.length){ const id=st.pop(); if(seen.has(id)||!P[id]||P[id].br!=="N") continue; seen.add(id); P[id].br="X"; for(const u of (UP[id]||[])) if(u) st.push(u); }
+  for(const id in P){ const q=P[id]; if(q.br==="N"&&q.sibof&&seen.has(q.sibof)) q.br="X"; } })();
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
+const TINT={}; (function(){ const bg=[255,250,240]; for(const k in BRC){ const h=BRC[k], c=[1,3,5].map(i=>parseInt(h.substr(i,2),16)), a=k==="G"||k==="V"?0.16:0.22;
+  TINT[k]="rgb("+c.map((v,i)=>Math.round(bg[i]*(1-a)+v*a)).join(",")+")"; } })();
+const tint=id=>TINT[(P[id]&&P[id].br)||"L"]||TINT.L;
+/* two families: a mother (UP[child][1]) whose family letter differs from her husband's (UP[child][0]), and Alter's wife vs Alter.
+   TWO[id] = husband's family letter; her own family keeps the right half (where the name starts), his the left half. */
+const TWO={}; (function(){ for(const c in UP){ const u=UP[c]||[], f=u[0], m=u[1]; if(f&&m&&P[f]&&P[m]&&P[f].br&&P[m].br&&P[f].br!==P[m].br) TWO[m]=P[f].br; }
+  const sp=D.fam&&D.fam.sp; if(sp&&P[sp]&&P[ROOT]&&P[sp].br!==P[ROOT].br) TWO[sp]=P[ROOT].br; })();
+function cardBg(id,x){ const o=TWO[id]; if(!o||!TINT[o]) return tint(id);
+  const g=cx.createLinearGradient(x,0,x+W,0); g.addColorStop(0,TINT[o]); g.addColorStop(0.38,TINT[o]); g.addColorStop(0.62,tint(id)); g.addColorStop(1,tint(id)); return g; }
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
 const W=250,H=158,GX=90,GG=150,RH=H+240,SIBW=W+GX;  // Alter 12:53: much more room so every line can be followed  // Alter 11:05: the first site's spacing (card 250 wide, 120 between generations, 34–40 between cards)
@@ -321,7 +338,7 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   if(hl){ cx.save(); cx.shadowColor="rgba(214,170,60,.9)"; cx.shadowBlur=28*Math.min(1,s*2)+6; cx.fillStyle="rgba(230,190,90,.55)"; rr(x-10,y-10,W+20,H+20,16); cx.fill(); cx.restore();
     cx.lineWidth=Math.max(3,3/s); cx.strokeStyle="#c9a35c"; rr(x-7,y-7,W+14,H+14,14); cx.stroke(); }
   cx.fillStyle="rgba(80,55,20,.10)"; rr(x+1,y+3,W,H,10); cx.fill();   // soft shadow (no blur)
-  rr(x,y,W,H,10); cx.fillStyle=mes?C.cardMes:root?"#fffdf5":C.card; cx.fill();
+  rr(x,y,W,H,10); cx.fillStyle=cardBg(id,x); cx.fill();
   cx.lineWidth=Math.max(1,0.9/s); cx.strokeStyle=id===sel?C.sel:root?C.gold:C.edge; if(mes) cx.setLineDash([5,4]); cx.stroke(); cx.setLineDash([]);
   if(id===sel||root){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
   // family-colour top edge
@@ -359,7 +376,7 @@ function cardS(id,n,lod){ const x=n.x-W/2, y=n.y, B=sprB(lod*dpr); let o=SPR.get
   if(hl){ cx.save(); cx.shadowColor="rgba(214,170,60,.9)"; cx.shadowBlur=28*Math.min(1,s*2)+6; cx.fillStyle="rgba(230,190,90,.55)"; rr(x-10,y-10,W+20,H+20,16); cx.fill(); cx.restore();
     cx.lineWidth=Math.max(3,3/s); cx.strokeStyle="#c9a35c"; rr(x-7,y-7,W+14,H+14,14); cx.stroke(); }
   if(o){ o.u=sprUse; cx.drawImage(o.c,x-SPAD,y-SPAD,o.w,o.h); }
-  else { cx.fillStyle=C.card; cx.fillRect(x,y,W,H); cx.fillStyle=bc(id); cx.fillRect(x,y,W,14); }
+  else { cx.fillStyle=cardBg(id,x); cx.fillRect(x,y,W,H); cx.fillStyle=bc(id); cx.fillRect(x,y,W,14); }
   if(id===sel){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
   if(hl) newBadge(x+W-6,y-14,1.8); }
 let warmed=false;
