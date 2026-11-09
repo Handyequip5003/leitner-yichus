@@ -340,9 +340,9 @@ function pillJump(id){ const sh=document.getElementById("sheet"); if(sh&&sh.clas
   tog.onclick=()=>setShut(!shut);
   for(const grp of PILLS){ const h=document.createElement("div"); h.className="plh"; h.textContent=grp.g; body.appendChild(h);
     for(const it of grp.items){ const id=pillId(grp,it); const b=document.createElement("button"); b.type="button"; b.className="pill"+(id?"":" unk");
-      const t1=document.createElement("b"); t1.textContent=pillName(it,id); const t2=document.createElement("small"); t2.textContent=id?(it.rel||""):"נאך נישט באקאנט";
-      b.appendChild(t1); b.appendChild(t2);
-      if(id){ b.style.setProperty("--pc",bc(id)); b.title=P[id].n; b.onclick=()=>pillJump(id); } else { b.disabled=true; b.title=(it.rel||"")+" · נאך נישט באקאנט"; }
+      const t1=document.createElement("b"); t1.textContent=pillName(it,id); b.appendChild(t1);
+      if(!id){ const t2=document.createElement("small"); t2.textContent="נאך נישט באקאנט"; b.appendChild(t2); }
+      if(id){ b.style.setProperty("--pc",bc(id)); b.title=(it.rel?it.rel+" · ":"")+P[id].n; b.onclick=()=>pillJump(id); } else { b.disabled=true; b.title=(it.rel||"")+" · נאך נישט באקאנט"; }
       body.appendChild(b); } }
   box.appendChild(tog); box.appendChild(body); document.body.appendChild(box); setShut(shut); })();
 function newBadge(xr,yt,k){ const w=46*k,h=22*k; cx.fillStyle="#b08d57"; rr(xr-w,yt,w,h,h/2); cx.fill(); cx.fillStyle="#fff"; cx.font="700 "+(13*k)+"px FRL, serif"; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.fillText("נייַ",xr-w/2,yt+h/2+1); cx.direction="ltr"; }
