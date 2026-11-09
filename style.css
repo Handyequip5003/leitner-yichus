@@ -95,3 +95,9 @@ button.x{position:absolute;top:10px;left:10px;width:36px;height:36px;border-radi
 #pills .pill:active{filter:brightness(1.12);transform:scale(.97)}
 #pills .pill.unk{background:#e3dccd;color:#8c7f68;box-shadow:none;cursor:default}
 #pills .pill.unk small{opacity:1}
+
+/* CLEANFACE_V1 */
+.vb{display:inline-block;font-size:.78em;font-weight:600;line-height:1.35;padding:0 6px;border-radius:9px;white-space:nowrap;vertical-align:1px}
+.vb.q{background:#f7e4e4;color:#a33}
+.vb.a{background:#f6ecd8;color:#8a5a12}
+.vw{color:#6b6253;font-size:.9em}

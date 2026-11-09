@@ -238,10 +238,21 @@ function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); c
 function wrapAll(t,font,maxw){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
   for(const x of w){ const tr=cur?cur+" "+x:x; if(!cur||cx.measureText(tr).width<=maxw) cur=tr; else { out.push(cur); cur=x; } } if(cur) out.push(cur); return out; }
 function fitName(t,sizes,maxw,maxl,weight){ let best=null; for(const z of sizes){ const f=weight+" "+z+'px FRL, "Frank Ruhl Libre", serif'; const ls=wrapAll(t,f,maxw); best={f,ls,z}; if(ls.length<=maxl){ cx.font=f; if(ls.every(l=>cx.measureText(l).width<=maxw)) return best; } } return best; }
+/* CLEANFACE_V1 (Alter 10:59 PM Nov 8): the closed card shows plain facts, no inline marks or source words; the circle on top carries the certainty. The opened card labels each unverified fact and names whose tree it came from. */
+const CF_SW=/(?:געני|Geni|מייהעריטעדזש|MyHeritage|אילן|מצבה|באום|דזשואיש-גען|JewishGen|SSA|בוים|ביימער)/, CF_SRC=/^(?:דער |די |א |אן )?(?:געני|Geni|מייהעריטעדזש|MyHeritage|אילן|מצבה|SSA|דזשואיש-גען|JewishGen)$/;
+function CF(t){ if(!t) return t; let s=String(t).replace(/בוימער/g,"ביימער"); s=s.replace(/(^|·\s*)[❓≈?✓]?\s*(?:געני|Geni|מייהעריטעדזש|MyHeritage)\s*:\s*/g,"$1"); s=s.replace(/\s*[–-]\s*[❓≈?]\s*(?:לויט|בלויז)\s[^·]*/g,""); s=s.replace(/\(([^()]*)\)/g,(m,c)=>{ const c2=c.replace(/[❓≈✓?]/g,"").replace(/\s+/g," ").trim(); if(!c2||/^(?:לויט|בלויז)(?:\s|$)/.test(c2)||(CF_SW.test(c2)&&!/\d/.test(c2))) return ""; const it=c2.split(/\s*[,;]\s*/).filter(z=>z&&!CF_SRC.test(z)); return it.length?"("+it.join(", ")+")":""; }); s=s.replace(/\s*[–-]?\s*(?:געני|Geni|MyHeritage|מייהעריטעדזש)\s*[❓≈?✓](?=\s*(?:·|$))/g,""); s=s.replace(/[❓≈✓?]/g,""); return s.replace(/\s+([,;·)])/g,"$1").replace(/\(\s+/g,"(").replace(/\s{2,}/g," ").replace(/(?:\s*·\s*){2,}/g," · ").replace(/^[\s·,;]+|[\s·,;]+$/g,"").trim(); }
+function CFT(t){ if(!t) return t; return String(t).split(" · ").filter(x=>!/^\s*(?:[❓≈?✓]|לויט\s|בלויז\s)/.test(x)).map(CF).filter(Boolean).join(" · "); }
+const VB=(q)=>`<span class="vb ${q?"q":"a"}">${q?"נישט באשטעטיגט":"בערך"}</span>`;
+function HL(t){ return esc(String(t||"").replace(/בוימער/g,"ביימער")).replace(/❓\s*(?:בלויז\s*)?(?:געני|Geni)/g,VB(1)+" לויט געני").replace(/❓/g,VB(1)); }
+function OWN(x){ const m=String(x||"").match(/די (?:בוימער|ביימער):\s*([^\n]+)/); if(!m) return ""; let r=m[1].trim(), more=0; const k=r.match(/\s*און נאך (\d+)\s*$/); if(k){ more=+k[1]; r=r.slice(0,k.index); } const a=r.split(/,\s+/).map(z=>z.trim()).filter(Boolean); if(!a.length) return ""; if(a.length===1&&!more) return "לויט דעם בוים פון "+a[0]; const sh=a.slice(0,3), rest=a.length-sh.length+more; return "לויט די ביימער פון "+sh.join(", ")+(rest?" און נאך "+rest:""); }
+function VL(l,own){ const t0=String(l).replace(/בוימער/g,"ביימער"), t=t0.trim(); const q=/❓/.test(t), a=!q&&/^(?:•\s*)?≈/.test(t); if(!q&&!a) return esc(t0);
+  const b=/^•\s*/.test(t)?"• ":""; const r=t.replace(/^•\s*/,"").replace(/^[❓≈]\s*/,""); const mh=/מייהעריטעדזש|MyHeritage/.test(r), g=/געני|Geni/.test(r); let who="";
+  if(mh&&!/(?:דער|דעם) בוים פון|די (?:בוימער|ביימער):/.test(r)&&own) who=own; else if(g&&!mh&&!/^(?:געני|Geni)/.test(r)) who="לויט געני";
+  return esc(b)+VB(q)+" "+esc(r).replace(/❓/g,"")+(who?` <span class="vw">(${esc(who)})</span>`:""); }
 const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id);
   // NOCUT_V1 (Alter Nov 8 7:57 PM "What is this cut off?"): nothing on a card is cut with "…". Text flows around the portrait
   // (narrow beside it, full width under it); when it still does not fit, the card's fonts step down until it does.
-  const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl); const mes=!!p.mes, cr=rab&&!mes;
+  const tl0=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl0); const tl=CFT(tl0), pn=CF(p.n); const mes=!!p.mes, cr=rab&&!mes;
   const PB=84, MB=34;  // portrait bottom, mark-circle bottom (card units)
   const rxAt=yb=>(por&&yb-15<PB)?W-83:W-13;
   const wAt=(yb,k)=>rxAt(yb)-(yb-15<MB?34:13)-(k?12:0);
@@ -252,14 +263,14 @@ const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const po
   let R=null;
   for(const f of [1,0.94,0.88,0.82,0.76,0.7,0.64,0.58,0.52]){ const out=[];
     let nm=[], nz=17*f, nf="";
-    for(const z0 of [17,15.5,14]){ nz=z0*f; nf='700 '+nz+'px FRL, "Frank Ruhl Libre", serif'; nm=wrapV(p.n,nf,13+nz,nz*1.22,cr); if(nm.length<=3) break; }
+    for(const z0 of [17,15.5,14]){ nz=z0*f; nf='700 '+nz+'px FRL, "Frank Ruhl Libre", serif'; nm=wrapV(pn,nf,13+nz,nz*1.22,cr); if(nm.length<=3) break; }
     nm.forEach(([t,yb],k)=>out.push({t,yb,f:nf,c:0,k:k===0&&cr}));
     let yy=nm.length?nm[nm.length-1][1]+nz*1.22+2:30; const lh=17*f;
     const FTf='italic 400 '+(13.5*f)+'px FRL, "Frank Ruhl Libre", serif', FDf='400 '+(13*f)+'px FRL, "Frank Ruhl Libre", serif';
     if(mes){ out.push({t:"לויט מסורה",yb:yy,f:'600 '+(12.5*f)+'px FRL, serif',c:2}); yy+=18*f; }
     else if(tl){ const ls=wrapV(tl,FTf,yy,lh); for(const [t,yb] of ls) out.push({t,yb,f:FTf,c:rab?2:1}); yy+=ls.length*lh; }
     const bl=[]; let yb=yy+2;
-    for(const t of [p.pl,p.d]){ if(!t) continue; const ls=wrapV(t,FDf,yb,lh); for(const [u,v] of ls) bl.push({t:u,yb:v,f:FDf,c:3}); yb+=ls.length*lh; }
+    for(const t of [CF(p.pl),CF(p.d)]){ if(!t) continue; const ls=wrapV(t,FDf,yb,lh); for(const [u,v] of ls) bl.push({t:u,yb:v,f:FDf,c:3}); yb+=ls.length*lh; }
     const all=out.concat(bl), lastb=all.length?all[all.length-1].yb:30; let ok=lastb<=H-9;
     if(ok) for(const o of all){ cx.font=o.f; if(cx.measureText(o.t).width>wAt(o.yb,o.k)+0.5){ ok=false; break; } }
     if(ok||f<0.53){ if(bl.length){ const sh=Math.max(0,(H-12)-lastb); for(const o of bl) o.yb+=sh; }
@@ -470,8 +481,8 @@ function openSheet(id){ sel=id; dirty=true; const p=P[id]; sheet.style.setProper
   sb.innerHTML=head(id,p)+`<div class="ld">…</div>`; sheet.classList.add("on"); sheet.setAttribute("aria-hidden","false"); sheet.scrollTop=0;
   if(vw<820&&N[id]){ const n=N[id]; const yS=(n.y+H/2)*s+ty; if(yS>vh*0.3) animTo(s,tx,ty-(yS-vh*0.2),420); }
   details(id).then(q=>{ if(sel!==id) return; sb.innerHTML=head(id,q)+body(id,q); wire(id); }); }
-function head(id,p){ const m=p.m||"unv"; return (!N[id]&&P[id]&&P[id].sibof?`<p class="hidn">דער קארטל איז באהאלטן אינעם בוים (געשוויסטער ווערן נישט געוויזן). <button type="button" data-sibon>ווייז געשוויסטער</button></p>`:"")+(p.mes?`<div class="mesl">לויט מסורה</div>`:"")+`<h1>${esc(p.n)}</h1>`+(p.t&&p.t!=="לויט מסורה"?`<p class="ti">${esc(p.t.replace(/^לויט מסורה · /,""))}</p>`:"")+
-  ((p.d||p.pl)?`<p class="meta">${esc([p.d,p.pl].filter(Boolean).join(" · "))}</p>`:"")+`<div class="mark"><span class="dot ${m}">${(MKC[m]||MKC.unv)[1]}</span>${esc(MKN[m]||"")}</div>`; }
+function head(id,p){ const m=p.m||"unv"; return (!N[id]&&P[id]&&P[id].sibof?`<p class="hidn">דער קארטל איז באהאלטן אינעם בוים (געשוויסטער ווערן נישט געוויזן). <button type="button" data-sibon>ווייז געשוויסטער</button></p>`:"")+(p.mes?`<div class="mesl">לויט מסורה</div>`:"")+`<h1>${esc(p.n)}</h1>`+(p.t&&p.t!=="לויט מסורה"?`<p class="ti">${HL(p.t.replace(/^לויט מסורה · /,""))}</p>`:"")+
+  ((p.d||p.pl)?`<p class="meta">${HL([p.d,p.pl].filter(Boolean).join(" · "))}</p>`:"")+`<div class="mark"><span class="dot ${m}">${(MKC[m]||MKC.unv)[1]}</span>${esc(MKN[m]||"")}</div>`; }
 function body(id,p){ let h=""; const u=UP[id]||[];
   const ms=(p.media||[]).length?p.media.map(x=>({f:x.f,cap:x.cap,cr:x.cr,u:x.u})):[]; curMed=ms;
   const NP=new Set(((LN&&LN.ids[id]&&LN.ids[id].p)||[])); const isNP=f=>wnOn&&(NP.has(f)||NP.has(String(f).replace(/^m\//,"").replace(/\.jpg$/,"")));
@@ -485,8 +496,8 @@ function body(id,p){ let h=""; const u=UP[id]||[];
   if(p.inhw) h+=`<p class="note2">${esc(p.inhw)}</p>`;
   const NI=LN&&LN.ids[id]; const nf=new Set(((NI&&NI.f)||[]).map(t=>t.trim()));
   if(NI&&wnOn) h=`<p class="note2" style="color:#8a6a2c"><span class="nwb">נייַ</span> ${NI.c?"א נייַער קאַרטל · ":""}${(NI.f||[]).length} נייַע פאַקטן${(NI.p||[]).length?" · "+NI.p.length+" נייַע בילדער":""} (<bdi dir="ltr">${esc(LN.date)}</bdi>)</p>`+h;
-  if(p.x) h+=`<div class="tx">`+p.x.split("\n").filter(l=>l.trim()).map(l=>{ const isN=wnOn&&nf.has(l.trim()); return `<div class="ln${isN?" nw":""}">${isN?'<span class="nwb">נייַ</span>':""}${esc(l)}</div>`; }).join("")+`</div>`;
-  if(p.src) h+=`<div class="src">${esc(p.src)}</div>`;
+  if(p.x){ const own=OWN(p.x); h+=`<div class="tx">`+p.x.split("\n").filter(l=>l.trim()).map(l=>{ const isN=wnOn&&nf.has(l.trim()); return `<div class="ln${isN?" nw":""}">${isN?'<span class="nwb">נייַ</span>':""}${VL(l,own)}</div>`; }).join("")+`</div>`; }
+  if(p.src) h+=`<div class="src">${HL(p.src)}</div>`;
   if((p.links||[]).length) h+=`<div class="lk">`+p.links.map(l=>`<a href="${esc(l.u)}" target="_blank" rel="noopener">${esc(l.t||"מקור")} ↗</a>`).join("")+`</div>`;
   return h; }
 function wire(id){ sb.querySelectorAll("[data-go]").forEach(a=>a.onclick=ev=>{ ev.preventDefault(); const t=a.dataset.go; if(N[t]) focus(t); openSheet(t); });
