@@ -43,10 +43,12 @@ const TINT={}; (function(){ const bg=[255,250,240]; for(const k in BRC){ const h
 const tint=id=>TINT[(P[id]&&P[id].br)||"L"]||TINT.L;
 /* two families: a mother (UP[child][1]) whose family letter differs from her husband's (UP[child][0]), and Alter's wife vs Alter.
    TWO[id] = husband's family letter; her own family keeps the right half (where the name starts), his the left half. */
-const TWO={}; (function(){ for(const c in UP){ const u=UP[c]||[], f=u[0], m=u[1]; if(f&&m&&P[f]&&P[m]&&P[f].br&&P[m].br&&P[f].br!==P[m].br) TWO[m]=P[f].br; }
-  const sp=D.fam&&D.fam.sp; if(sp&&P[sp]&&P[ROOT]&&P[sp].br!==P[ROOT].br) TWO[sp]=P[ROOT].br; })();
+const TWO={}, TWOH={}; (function(){ for(const c in UP){ const u=UP[c]||[], f=u[0], m=u[1]; if(f&&m&&P[f]&&P[m]&&P[f].br&&P[m].br&&P[f].br!==P[m].br){ TWO[m]=P[f].br; TWOH[m]=f; } }
+  const sp=D.fam&&D.fam.sp; if(sp&&P[sp]&&P[ROOT]&&P[sp].br!==P[ROOT].br){ TWO[sp]=P[ROOT].br; TWOH[sp]=ROOT; } })();
 function cardBg(id,x){ const o=TWO[id]; if(!o||!TINT[o]) return tint(id);
-  const g=cx.createLinearGradient(x,0,x+W,0); g.addColorStop(0,TINT[o]); g.addColorStop(0.38,TINT[o]); g.addColorStop(0.62,tint(id)); g.addColorStop(1,tint(id)); return g; }
+  /* SPLITSIDE_V1 (Alter 10:06 PM Nov 8: "brown should be closer to me on my wife"): the husband's colour on the half of her card that faces his card, hers on the far half */
+  const hb=TWOH[id], hr=!!(hb&&typeof N!=="undefined"&&N[hb]&&N[id]&&N[hb].x>N[id].x), a0=hr?tint(id):TINT[o], a1=hr?TINT[o]:tint(id);
+  const g=cx.createLinearGradient(x,0,x+W,0); g.addColorStop(0,a0); g.addColorStop(0.38,a0); g.addColorStop(0.62,a1); g.addColorStop(1,a1); return g; }
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
 const W=250,H=158,GX=90,GG=150,RH=H+240,SIBW=W+GX;  // Alter 12:53: much more room so every line can be followed  // Alter 11:05: the first site's spacing (card 250 wide, 120 between generations, 34–40 between cards)
