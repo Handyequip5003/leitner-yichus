@@ -536,6 +536,16 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
   { const lb=document.createElement("label"); lb.className="sw"; lb.innerHTML='<input type="checkbox" id="s_see"><span class="tg"></span><span class="stl">ליניעס צו \'זעה אויבן\'<small>א געשטריכלטע ליניע פון יעדן \'זעה אויבן\' ביז צום קארטל פון דער מענטש (<span id="s_seen"></span> ליניעס)</small></span>';
     pn.appendChild(lb); const c2=lb.querySelector("input"); c2.checked=!!SET.see; lb.querySelector("#s_seen").textContent=SEEL.length;
     c2.onchange=()=>{ SET.see=c2.checked; saveSet(); dirty=true; }; }  // SEEABOVE_TOGGLE_V1
+  { /* STATS_V1 (Alter 9:57 PM Nov 8): how many people, how many with a face picture, how many with a known kever – counted from the data at page load */
+    const ids=Object.keys(P).filter(id=>!P[id].sibof), n=ids.length, hasQ=ids.some(id=>P[id].q);
+    const cnt=ch=>ids.filter(id=>{ const p=P[id]; if(hasQ) return (p.q||"").includes(ch); const md=p.md||[]; return ch==="i"?md.length>0:md.some(m=>m[1]===(ch==="f"?"p":"k")); }).length;
+    const pc=k=>n?" ("+(Math.round(k*1000/n)/10)+"%)":"";
+    const nf=cnt("f"), nk=cnt("k"), ni=cnt("i"), fm=v=>v.toLocaleString("en-US");
+    const row=(a,b,c)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid rgba(0,0,0,.08)"><span>${a}</span><span style="white-space:nowrap;font-weight:700">${b}<small style="font-weight:400;opacity:.75">${c||""}</small></span></div>`;
+    const bx=document.createElement("div"); bx.id="s_stats"; bx.style.cssText="margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(120,100,60,.08);font-size:15px;line-height:1.35";
+    bx.innerHTML=`<b style="display:block;margin-bottom:4px">סטאטיסטיק</b>`+row("סך הכל מענטשן",fm(n))+row("מיט א פנים (א בילד פון דעם מענטש)",fm(nf),pc(nf))+row("מיט א באקאנטן קבר",fm(nk),pc(nk))+row("מיט עפעס א בילד",fm(ni),pc(ni))+
+      `<small style="display:block;margin-top:6px;opacity:.7">די צאלן רעכענען זיך אויס פון אלע קארטלעך יעדעס מאל ווען דער בלאט עפנט זיך (אחוץ די געשוויסטער)</small>`;
+    pn.appendChild(bx); }  // STATS_V1
   window.__yset=apply; })();
 /* ---------- start: centred on Alter at a readable zoom ---------- */
 home(); loop();
