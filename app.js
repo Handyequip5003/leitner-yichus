@@ -19,7 +19,7 @@ const PILLS=[
     {path:[0,1], label:"באבע",               rel:"שווער'ס מאמע"},
     {path:[1,1], label:"באבע",               rel:"שוויגער'ס מאמע"} ]} ];
 /* settings (Alter Nov 8 6:27 PM): by default only the direct line up (parents, grandparents and higher); siblings behind ⚙ */
-const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs}; })();
+const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs, see:!!o.see}; })();  // SEEABOVE_TOGGLE_V1: see = "זעה אויבן" lines
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"); let cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:MARRIAGE_COLOR,lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
@@ -178,7 +178,7 @@ const SEE_COLOR="#B07A0E"; const SEEL=[]; let SEESEL=null;
       pts=[[sx,sy],[sx,ya],[xv,ya],[xv,yb],[ex,yb],[ex,ey]]; }
     let x0=1e18,x1=-1e18,y0=1e18,y1=-1e18; for(const [x,y] of pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }
     const r={c:t.c,p:t.p,pts,x0,x1,y0,y1}; SEEL.push(r); t.r=r; } })();
-function seeDraw(x0,x1,y0,y1,lw,bold){ if(!SEEL.length) return; const pad=60/s, a=Math.min(60,Math.max(12,10/s)); let on=false;
+function seeDraw(x0,x1,y0,y1,lw,bold){ if(!SEEL.length||!SET.see) return; const pad=60/s, a=Math.min(60,Math.max(12,10/s)); let on=false;
   for(const r of SEEL){ if(r.x1<x0-pad||r.x0>x1+pad||r.y1<y0-pad||r.y0>y1+pad) continue;
     const hi=!!sel&&(r.c===sel||r.p===sel); if(bold&&!hi) continue;
     if(!on){ on=true; cx.save(); cx.strokeStyle=SEE_COLOR; cx.fillStyle=SEE_COLOR; cx.setLineDash([Math.max(12,9/s),Math.max(8,6/s)]); if(!bold&&s*W<20) cx.globalAlpha*=0.7; }
@@ -503,6 +503,9 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
   const apply=v=>{ SET.sibs=v; saveSet(); const h=sel?"#"+encodeURIComponent(sel):""; history.replaceState(null,"",location.pathname+location.search+h); location.reload(); };
   ck.onchange=()=>apply(ck.checked);
   sb.addEventListener("click",e=>{ if(e.target.closest("[data-sibon]")){ e.preventDefault(); apply(true); } });
+  { const lb=document.createElement("label"); lb.className="sw"; lb.innerHTML='<input type="checkbox" id="s_see"><span class="tg"></span><span class="stl">ליניעס צו \'זעה אויבן\'<small>א געשטריכלטע ליניע פון יעדן \'זעה אויבן\' ביז צום קארטל פון דער מענטש (<span id="s_seen"></span> ליניעס)</small></span>';
+    pn.appendChild(lb); const c2=lb.querySelector("input"); c2.checked=!!SET.see; lb.querySelector("#s_seen").textContent=SEEL.length;
+    c2.onchange=()=>{ SET.see=c2.checked; saveSet(); dirty=true; }; }  // SEEABOVE_TOGGLE_V1
   window.__yset=apply; })();
 /* ---------- start: centred on Alter at a readable zoom ---------- */
 home(); loop();
