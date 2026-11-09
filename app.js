@@ -16,7 +16,7 @@ const PILLS=[
   {g:"מיין ווייב'ס זייט", from:"wife", items:[
     {path:[0,0], label:"זיידע ראבינאוויטש",  rel:"שווער'ס טאטע"},
     {path:[1,0], label:"זיידע מענדלאוויטש", rel:"שוויגער'ס טאטע", alt:["mendel_avraham"], name:"מענדלאוויטש"},
-    {path:[0,1], label:"באבע",               rel:"שווער'ס מאמע"},
+    {path:[0,1], label:"באבע קרישעווסקי",   rel:"שווער'ס מאמע"},
     {path:[1,1], label:"באבע",               rel:"שוויגער'ס מאמע"} ]} ];
 /* settings (Alter Nov 8 6:27 PM): by default only the direct line up (parents, grandparents and higher); siblings behind ⚙ */
 const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs, see:!!o.see}; })();  // SEEABOVE_TOGGLE_V1: see = "זעה אויבן" lines
