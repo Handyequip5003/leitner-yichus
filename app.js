@@ -7,7 +7,7 @@ const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(lo
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"), cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:"#94702f",lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
-const BRC={L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78"};
+const BRC={B:"#9c2f6e",L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78"};
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
@@ -23,7 +23,13 @@ const tparents={}; const extra=[]; // extra = cross links (pedigree collapse)
 (function span(){ const seen=new Set([ROOT]); let q=[ROOT]; N[ROOT]={dep:0};
   while(q.length){ const nq=[]; for(const id of q){ const u=UP[id]||[]; tparents[id]=[];
       for(let k=0;k<2;k++){ const p=u[k]; if(!p||!P[p]) continue; if(seen.has(p)){ extra.push([id,p]); continue; } seen.add(p); N[p]={dep:N[id].dep+1,ch:id}; tparents[id].push(p); nq.push(p);} }
-    q=nq; } })();
+    q=nq; }
+  // WIFE_LINE_V1 (Alter Nov 8 6:56 PM: his father-in-law): the wife's own direct line goes up from her card
+  const sp0=D.fam&&D.fam.sp&&P[D.fam.sp]?D.fam.sp:null;
+  if(sp0&&!seen.has(sp0)){ seen.add(sp0); N[sp0]={dep:0}; q=[sp0];
+    while(q.length){ const nq=[]; for(const id of q){ const u=UP[id]||[]; tparents[id]=[];
+        for(let k=0;k<2;k++){ const p=u[k]; if(!p||!P[p]) continue; if(seen.has(p)){ extra.push([id,p]); continue; } seen.add(p); N[p]={dep:N[id].dep+1,ch:id}; tparents[id].push(p); nq.push(p);} }
+      q=nq; } } })();
 // subtree-centred layout (Alter 12:53 + root 17:55): each couple sits directly above its child; contours keep every
 // subtree apart (GX inside a family, GX+GG between families), so lines run straight and never cross or pass behind a card.
 const PITCH=W+GX;
@@ -60,12 +66,18 @@ function lay(id){
   N[id].po=ord.map((p,k)=>[p,off[k]-mid]);
   const res=own0(); for(let d=0;d<acc.l.length;d++){ res.l.push(acc.l[d]-mid); res.r.push(acc.r[d]-mid); }
   return res; }
-lay(ROOT);
+const MAINC=lay(ROOT);
 (function place(){ const st=[[ROOT,0]]; while(st.length){ const [id,x]=st.pop(); const n=N[id]; n.x=x; n.y=-n.dep*RH; for(const [p,o] of n.po||[]) st.push([p,x+o]); } })();
+// the wife's line (WIFE_LINE_V1): she stays beside Alter; her ancestors run out past the left edge of Alter's tree, in the lane just above her row
+(function wifeLine(){ const sp=D.fam&&D.fam.sp&&P[D.fam.sp]?D.fam.sp:null; if(!sp||!N[sp]||!(tparents[sp]||[]).length) return;
+  const cW=lay(sp); let dl=0; const x0=N[ROOT].x-PITCH;
+  for(let d=1;d<cW.r.length&&d<MAINC.l.length;d++) dl=Math.min(dl, MAINC.l[d]-(GX+GG)-cW.r[d]+PITCH);
+  N[sp].po=(N[sp].po||[]).map(([p,o])=>[p,o+dl]); N[sp].lof=0.3; N[sp].sw=0;
+  const st=[[sp,x0]]; while(st.length){ const [id,x]=st.pop(); const n=N[id]; n.x=x; n.y=-n.dep*RH; for(const [p,o] of n.po||[]) st.push([p,x+o]); } })();
 for(const a in sibsOf){ if(!N[a]||N[a].sibof) continue; sibsOf[a].forEach((sb,k)=>{ N[sb]={x:N[a].x+(N[a].sside||-1)*(k+1)*SIBW,y:N[a].y,dep:N[a].dep,sibof:a}; }); }
 // Alter's own family (Alter 12:55): his wife beside him (to his left), their children one row below, centred under the couple
 const FAM=D.fam||null, KIDS=[]; let minDep=0;
-if(FAM&&N[ROOT]){ const a=N[ROOT]; const sp=FAM.sp&&P[FAM.sp]?FAM.sp:null; if(sp) N[sp]={x:a.x-PITCH,y:a.y,dep:0,spof:ROOT,po:[]};
+if(FAM&&N[ROOT]){ const a=N[ROOT]; const sp=FAM.sp&&P[FAM.sp]?FAM.sp:null; if(sp){ if(N[sp]&&N[sp].po&&N[sp].po.length){ N[sp].spof=ROOT; N[sp].x=a.x-PITCH; N[sp].y=a.y; } else N[sp]={x:a.x-PITCH,y:a.y,dep:0,spof:ROOT,po:[]}; }
   const ks=(FAM.kids||[]).filter(k=>P[k]); const mx=sp?a.x-PITCH/2:a.x;
   ks.forEach((k,i)=>{ N[k]={x:mx+(i-(ks.length-1)/2)*PITCH,y:a.y+RH,dep:-1,po:[],kid:1}; KIDS.push(k); }); if(ks.length) minDep=-1; }
 const ids=Object.keys(N); const rows={}; let maxDep=0;
