@@ -165,7 +165,7 @@ function rowClear(d,xa,xb,a,b){ const row=rows[d]; if(!row) return true; let lo=
    drawn behind the cards, so it never covers a name. Tapping the stub flies to the real card, which glows.
    Patch: tasks/b04117ac-a7ad-437b-8b0d-d3a6e5e7d8cf/seeabove_patch.py (idempotent). */
 const SEE_COLOR="#B07A0E"; const SEEL=[]; let SEESEL=null;
-(function seeRoutes(){ const TRK={}; const hw=(d,t)=>-d*RH-GAP+8+t*6;  // track t in the gap above row d, just under the row above
+(function seeRoutes(){ const TRK={}; const hw=(d,t)=>-d*RH-GAP+18+t*5;  // track t in the gap above row d, just under the row above
   const free=(d,t,a,b)=>{ const L=TRK[d+'|'+t]; if(!L) return true; for(const [u,v] of L) if(a<v+40&&b>u-40) return false; return true; };
   const pick=(d,a,b)=>{ const lo=Math.min(a,b), hi=Math.max(a,b); let t=0; for(;t<8;t++) if(free(d,t,lo,hi)) break; if(t===8) t=SEEL.length%8; (TRK[d+'|'+t]=TRK[d+'|'+t]||[]).push([lo,hi]); return t; };
   const col=(xa,dlo,dhi)=>{ if(freeAt(xa,dlo,dhi)) return xa; for(let k=1;k<300;k++) for(const sg of [1,-1]){ const x=xa+sg*k*12; if(freeAt(x,dlo,dhi)) return x; } return xa; };
@@ -182,7 +182,7 @@ function seeDraw(x0,x1,y0,y1,lw,bold){ if(!SEEL.length) return; const pad=60/s, 
   for(const r of SEEL){ if(r.x1<x0-pad||r.x0>x1+pad||r.y1<y0-pad||r.y0>y1+pad) continue;
     const hi=!!sel&&(r.c===sel||r.p===sel); if(bold&&!hi) continue;
     if(!on){ on=true; cx.save(); cx.strokeStyle=SEE_COLOR; cx.fillStyle=SEE_COLOR; cx.setLineDash([Math.max(12,9/s),Math.max(8,6/s)]); if(!bold&&s*W<20) cx.globalAlpha*=0.7; }
-    cx.lineWidth=bold?lw*1.6:Math.max(1.8,lw*0.75); poly(r.pts,22);
+    cx.lineWidth=bold?Math.max(lw*1.7,3.5/s):Math.max(1.8,lw*0.75); poly(r.pts,22);
     const e=r.pts[r.pts.length-1], f=r.pts[r.pts.length-2], dy=Math.sign(e[1]-f[1])||1;
     if(e[0]<x0-a||e[0]>x1+a||e[1]<y0-a||e[1]>y1+a) continue;
     cx.beginPath(); cx.moveTo(e[0],e[1]); cx.lineTo(e[0]-a*0.62,e[1]-dy*a*1.15); cx.lineTo(e[0]+a*0.62,e[1]-dy*a*1.15); cx.closePath(); cx.fill(); }
