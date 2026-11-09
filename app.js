@@ -300,7 +300,7 @@ function draw(){
   cx.setTransform(dpr*s,0,0,dpr*s,dpr*tx,dpr*ty);
   // connectors: child top -> mid-gap -> across -> up to the parent; family colour of the parent; the tapped card's links bold
   const gapTop=RH-H, rad=16, lw=Math.max(2.2,1.2/s), mo=Math.min(11,Math.max(4.5,2.4/s));
-  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop*(n.lof||0.5); cx.strokeStyle=n.id?lc(n.id):lc(p);  // LINECOLORS_V1: the child's family colour cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
+  const link=(n,q,p,bold)=>{ const ya=n.y, yb=q.y+H, lane=n.y-gapTop*(n.lof||0.5); cx.strokeStyle=n.id?lc(n.id):lc(p); /* LINECOLORS_V1: the child's family colour; LINEFIX1_V1 */ cx.lineWidth=bold?lw*2.4:lw; cx.beginPath(); cx.moveTo(n.x,ya);
     if(Math.abs(q.x-n.x)<1) cx.lineTo(q.x,yb);
     else { const sg=q.x>n.x?1:-1, r=Math.min(rad,Math.abs(q.x-n.x)/2); cx.lineTo(n.x,lane+r); cx.quadraticCurveTo(n.x,lane,n.x+sg*r,lane); cx.lineTo(q.x-sg*r,lane); cx.quadraticCurveTo(q.x,lane,q.x,lane-r); cx.lineTo(q.x,yb); }
     cx.stroke(); };
@@ -557,7 +557,7 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
     const nf=cnt("f"), nk=cnt("k"), ni=cnt("i"), fm=v=>v.toLocaleString("en-US");
     const row=(a,b,c)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid rgba(0,0,0,.08)"><span>${a}</span><span style="white-space:nowrap;font-weight:700">${b}<small style="font-weight:400;opacity:.75">${c||""}</small></span></div>`;
     const bx=document.createElement("div"); bx.id="s_stats"; bx.style.cssText="margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(120,100,60,.08);font-size:15px;line-height:1.35";
-    bx.innerHTML=`<b style="display:block;margin-bottom:4px">סטאטיסטיק</b>`+row("סך הכל מענטשן",fm(n))+row("מיט א פנים (א בילד פון דעם מענטש)",fm(nf),pc(nf))+row("מיט א באקאנטן קבר",fm(nk),pc(nk))+row("מיט עפעס א בילד",fm(ni),pc(ni))+
+    bx.innerHTML=`<b style="display:block;margin-bottom:4px">סטאטיסטיק</b>`+row("סך הכל מענטשן",fm(n))+row("מיט א פנים (א בילד פון דעם מענטש)",fm(nf),pc(nf))+row("מיט א באקאנטן קבר",fm(nk),pc(nk))+row("מיט עפעס א בילד",fm(ni),pc(ni))+/* STATS_V2 */(()=>{ const mk=id=>{ const m=P[id].m||"unv"; return MKC[m]?m:"unv"; }, c={ok:0,inf:0,unv:0,alt:0}; ids.forEach(id=>c[mk(id)]++); return `<div style="margin-top:6px"></div>`+row("זיכער (✓)",fm(c.ok),pc(c.ok))+row("בערך (≈)",fm(c.inf),pc(c.inf))+row("נישט באשטעטיגט (?)",fm(c.unv),pc(c.unv))+row("פון אלטר אליין (א)",fm(c.alt),pc(c.alt)); })()+
       `<small style="display:block;margin-top:6px;opacity:.7">די צאלן רעכענען זיך אויס פון אלע קארטלעך יעדעס מאל ווען דער בלאט עפנט זיך (אחוץ די געשוויסטער)</small>`;
     pn.appendChild(bx); }  // STATS_V1
   window.__yset=apply; })();
