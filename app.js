@@ -159,6 +159,42 @@ function rowClear(d,xa,xb,a,b){ const row=rows[d]; if(!row) return true; let lo=
   for(const id in N){ const n=N[id]; if(!n.sibof) continue; const a_=N[n.sibof]; if(!a_) continue;
     const has=(a_.po&&a_.po.length)||XR.some(r=>r.c===n.sibof)||STUBS.some(t=>t.c===n.sibof); if(has) SIBL.push([id,n.sibof]); }
 })();
+/* SEEABOVE_V1 (Alter Nov 8 7:56 PM: "a different line going from there to the person that its up there"): every
+   "זעה אויבן" stub gets its own dashed amber line with an arrowhead into the one real card. It runs in its own tracks
+   just under the row above (clear of the parent lines' tracks), crosses rows in a free column between cards, and is
+   drawn behind the cards, so it never covers a name. Tapping the stub flies to the real card, which glows.
+   Patch: tasks/b04117ac-a7ad-437b-8b0d-d3a6e5e7d8cf/seeabove_patch.py (idempotent). */
+const SEE_COLOR="#B07A0E"; const SEEL=[]; let SEESEL=null;
+(function seeRoutes(){ const TRK={}; const hw=(d,t)=>-d*RH-GAP+8+t*6;  // track t in the gap above row d, just under the row above
+  const free=(d,t,a,b)=>{ const L=TRK[d+'|'+t]; if(!L) return true; for(const [u,v] of L) if(a<v+40&&b>u-40) return false; return true; };
+  const pick=(d,a,b)=>{ const lo=Math.min(a,b), hi=Math.max(a,b); let t=0; for(;t<8;t++) if(free(d,t,lo,hi)) break; if(t===8) t=SEEL.length%8; (TRK[d+'|'+t]=TRK[d+'|'+t]||[]).push([lo,hi]); return t; };
+  const col=(xa,dlo,dhi)=>{ if(freeAt(xa,dlo,dhi)) return xa; for(let k=1;k<300;k++) for(const sg of [1,-1]){ const x=xa+sg*k*12; if(freeAt(x,dlo,dhi)) return x; } return xa; };
+  for(const t of STUBS){ const n=N[t.c], q=N[t.p]; if(!n||!q||t.x==null) continue; const dc=n.dep, dp=q.dep;
+    t.lab=dp>dc?"זעה אויבן ⟵":dp===dc?"זעה אויף דער זייט ⟵":"זעה אונטן ⟵";
+    const sx=t.x, sy=t.y, up=dp>dc, sg=q.x>sx?-1:1, ex=q.x+sg*62, ey=up?q.y+H:q.y;
+    const dA=dc, dB=up?dp-1:dp; let pts;   // gap above the child's row -> gap beside the parent (under it when higher, over it otherwise)
+    if(dA===dB){ const y=hw(dA,pick(dA,sx,ex)); pts=[[sx,sy],[sx,y],[ex,y],[ex,ey]]; }
+    else { const xv=col(ex+sg*(W/2+XM+40),Math.min(dA,dB)+1,Math.max(dA,dB)); const ya=hw(dA,pick(dA,sx,xv)), yb=hw(dB,pick(dB,xv,ex));
+      pts=[[sx,sy],[sx,ya],[xv,ya],[xv,yb],[ex,yb],[ex,ey]]; }
+    let x0=1e18,x1=-1e18,y0=1e18,y1=-1e18; for(const [x,y] of pts){ x0=Math.min(x0,x); x1=Math.max(x1,x); y0=Math.min(y0,y); y1=Math.max(y1,y); }
+    const r={c:t.c,p:t.p,pts,x0,x1,y0,y1}; SEEL.push(r); t.r=r; } })();
+function seeDraw(x0,x1,y0,y1,lw,bold){ if(!SEEL.length) return; const pad=60/s, a=Math.min(60,Math.max(12,10/s)); let on=false;
+  for(const r of SEEL){ if(r.x1<x0-pad||r.x0>x1+pad||r.y1<y0-pad||r.y0>y1+pad) continue;
+    const hi=!!sel&&(r.c===sel||r.p===sel); if(bold&&!hi) continue;
+    if(!on){ on=true; cx.save(); cx.strokeStyle=SEE_COLOR; cx.fillStyle=SEE_COLOR; cx.setLineDash([Math.max(12,9/s),Math.max(8,6/s)]); if(!bold&&s*W<20) cx.globalAlpha*=0.7; }
+    cx.lineWidth=bold?lw*1.6:Math.max(1.8,lw*0.75); poly(r.pts,22);
+    const e=r.pts[r.pts.length-1], f=r.pts[r.pts.length-2], dy=Math.sign(e[1]-f[1])||1;
+    if(e[0]<x0-a||e[0]>x1+a||e[1]<y0-a||e[1]>y1+a) continue;
+    cx.beginPath(); cx.moveTo(e[0],e[1]); cx.lineTo(e[0]-a*0.62,e[1]-dy*a*1.15); cx.lineTo(e[0]+a*0.62,e[1]-dy*a*1.15); cx.closePath(); cx.fill(); }
+  if(on) cx.restore(); }
+function seeJump(t){ const sh=document.getElementById("sheet"); if(sh&&sh.classList.contains("on")&&typeof closeSheet==="function") closeSheet();
+  const n=N[t.p]; if(!n) return; sel=t.p; SEESEL=t.r||null; PULSE=null; vx=vy=0;
+  const s0=s, s1=Math.max(0.6,Math.min(1,s<0.6?0.75:s)), cxs=vw/2, cys=vh*0.45;
+  const wa=(cxs-tx)/s0, wb=(cys-ty)/s0, wc=n.x+W/2-W/2, wd=n.y+H/2, dist=Math.hypot(wc-wa,wd-wb);
+  const bump=Math.max(0,dist*1.15/vw-(1/s0+1/s1)/2), ms=dist*s0<vw*1.5?700:1700, t0=performance.now();
+  anim=()=>{ const k0=Math.min(1,(performance.now()-t0)/ms), k=k0<0.5?4*k0*k0*k0:1-Math.pow(-2*k0+2,3)/2;
+    s=1/((1-k)/s0+k/s1+bump*Math.sin(Math.PI*k)); const wx=wa+(wc-wa)*k, wy=wb+(wd-wb)*k; tx=cxs-wx*s; ty=cys-wy*s;
+    if(k0>=1){ anim=null; PULSE={id:t.p,t0:performance.now()}; } dirty=true; return true; }; dirty=true; }
 function poly(pts,r){ cx.beginPath(); cx.moveTo(pts[0][0],pts[0][1]);
   for(let i=1;i<pts.length-1;i++){ const [ax,ay]=pts[i-1],[bx,by]=pts[i],[ccx,ccy]=pts[i+1]; const rr_=Math.min(r,Math.hypot(bx-ax,by-ay)/2,Math.hypot(ccx-bx,ccy-by)/2); if(rr_<1) cx.lineTo(bx,by); else cx.arcTo(bx,by,ccx,ccy,rr_); }
   const e=pts[pts.length-1]; cx.lineTo(e[0],e[1]); cx.stroke(); }
@@ -237,6 +273,7 @@ function draw(){
       for(const [p] of n.po){ const q=N[p]; if(Math.max(q.x,n.x)<x0-W||Math.min(q.x,n.x)>x1+W) continue; link(n,q,p,false); } } }
   // further lines of descent into the one card (each person once) + sibling brackets
   for(const r of XR){ if(r.x1<x0-W||r.x0>x1+W||r.y1<y0-H||r.y0>y1+H) continue; cx.strokeStyle=bc(r.p); cx.lineWidth=lw; poly(r.pts,rad); }
+  seeDraw(x0,x1,y0,y1,lw,false);  // SEEABOVE_V1
   for(const [sb,an] of SIBL){ const n2=N[sb],a3=N[an]; if(Math.max(n2.x,a3.x)<x0-W||Math.min(n2.x,a3.x)>x1+W) continue; cx.strokeStyle=bc(an); cx.lineWidth=lw*0.8; cx.setLineDash([2,0]); poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); }
   marLines(false);
   for(const k of KIDS) kidLink(k,false);
@@ -246,6 +283,7 @@ function draw(){
     for(const k of KIDS) if(sel===k||sel===ROOT||(FAM&&sel===FAM.sp)) kidLink(k,true);
     for(const r of XR){ if(r.c===sel||r.p===sel){ cx.strokeStyle=bc(r.p); cx.lineWidth=lw*2.4; poly(r.pts,rad); } }
     for(const [sb,an] of SIBL){ if(sb===sel||an===sel){ const n2=N[sb],a3=N[an]; cx.strokeStyle=bc(an); cx.lineWidth=lw*1.8; poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); } } }
+  seeDraw(x0,x1,y0,y1,lw,true);  // SEEABOVE_V1: the tapped card's "see above" lines, bold
   const lod=s*W; let drawn=0; sprUse++; sprMiss=0; sprT=performance.now()+(ptr.size||anim?7:14);
   for(let d=d0;d<=d1;d++){ const row=rows[d]; if(!row) continue;
     let lo=0,hi=row.length; while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2<x0) lo=m+1; else hi=m; }
@@ -255,7 +293,7 @@ function draw(){
   // dashed stubs for the rare far-away second line: tap flies to the one real card
   if(STUBS.length&&lod>=20){ for(const t of STUBS){ if(t.x+t.w/2<x0||t.x-t.w/2>x1||t.y+t.h<y0||t.y>y1) continue;
       cx.save(); cx.setLineDash([6,5]); cx.lineWidth=Math.max(1.6,1.2/s); cx.strokeStyle=bc(t.p); cx.fillStyle="rgba(255,250,240,.96)"; rr(t.x-t.w/2,t.y,t.w,t.h,10); cx.fill(); cx.stroke(); cx.setLineDash([]);
-      cx.fillStyle=C.ink; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.font='700 13px FRL, "Frank Ruhl Libre", serif'; cx.fillText("זעה אויבן ⟵",t.x,t.y+14);
+      cx.fillStyle=C.ink; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.font='700 13px FRL, "Frank Ruhl Libre", serif'; cx.fillText(t.lab||"זעה אויבן ⟵",t.x,t.y+14);
       let fs=11.5; const nm=P[t.p].n; cx.font='400 '+fs+'px FRL, serif'; while(cx.measureText(nm).width>t.w-12&&fs>7){ fs-=0.5; cx.font='400 '+fs+'px FRL, serif'; } cx.fillStyle=C.ink2; cx.fillText(nm,t.x,t.y+32); cx.restore(); } }
   return drawn; }
 function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.mes, root=id===ROOT, col=bc(id);
@@ -361,7 +399,7 @@ cv.addEventListener("pointermove",e=>{ const o=ptr.get(e.pointerId); if(!o) retu
 function up(e){ const had=ptr.has(e.pointerId); ptr.delete(e.pointerId); if(ptr.size<2) pinch=null; if(ptr.size===1){ vx=vy=0; }
   if(!had||ptr.size) return; const now=performance.now(); if(now-lastT>60){ vx=vy=0; } lastT=now;
   if(moved<10&&now-downAt<500){ vx=vy=0; const id=hit(e.clientX,e.clientY);
-    const st=hitStub(e.clientX,e.clientY); if(st){ openSheet(st.p); focus(st.p,Math.max(s,0.6)); } else if(id){ openSheet(id); } else if(now-lastTap<320){ zoomTo(e.clientX,e.clientY,Math.min(3,s*2.2)); } lastTap=now; } }
+    const st=hitStub(e.clientX,e.clientY); if(st){ seeJump(st); } else if(id){ openSheet(id); } else if(now-lastTap<320){ zoomTo(e.clientX,e.clientY,Math.min(3,s*2.2)); } lastTap=now; } }
 cv.addEventListener("pointerup",up,{passive:true}); cv.addEventListener("pointercancel",up,{passive:true});
 cv.addEventListener("wheel",e=>{ e.preventDefault(); const f=Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.0018)); const ns=clampS(s*f); const wx=(e.clientX-tx)/s, wy=(e.clientY-ty)/s; s=ns; tx=e.clientX-wx*s; ty=e.clientY-wy*s; dirty=true; },{passive:false});
 function hitStub(sx,sy){ const wx=(sx-tx)/s, wy=(sy-ty)/s; for(const t of STUBS) if(wx>=t.x-t.w/2-4&&wx<=t.x+t.w/2+4&&wy>=t.y-4&&wy<=t.y+t.h+4) return t; return null; }
