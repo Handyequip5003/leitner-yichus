@@ -23,7 +23,7 @@ const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(lo
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"); let cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:MARRIAGE_COLOR,lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
-const BRC={B:"#9c2f6e",L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78"};
+const BRC={B:"#9c2f6e",L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78",N:"#b07d0e"};
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
 const RAB=/^(הגה"ק|הגה"צ|הרה"ק|הרה"צ|הגאון|הרב |הרבני|רבי |רבנו|רבינו|האדמו"ר|מרן|הקדוש|רב |ר' .*(אב"ד|רב ))|אב"ד|אדמו"ר|בעל ה|זצ"ל|זי"ע|הי"ד|ראש ישיבה|דיין|מגיד/;
@@ -208,13 +208,33 @@ function wrap(t,font,maxw,maxl){ cx.font=font; const w=String(t).split(/\s+/); c
 function wrapAll(t,font,maxw){ cx.font=font; const w=String(t).split(/\s+/); const out=[]; let cur="";
   for(const x of w){ const tr=cur?cur+" "+x:x; if(!cur||cx.measureText(tr).width<=maxw) cur=tr; else { out.push(cur); cur=x; } } if(cur) out.push(cur); return out; }
 function fitName(t,sizes,maxw,maxl,weight){ let best=null; for(const z of sizes){ const f=weight+" "+z+'px FRL, "Frank Ruhl Libre", serif'; const ls=wrapAll(t,f,maxw); best={f,ls,z}; if(ls.length<=maxl){ cx.font=f; if(ls.every(l=>cx.measureText(l).width<=maxw)) return best; } } return best; }
-const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id); const tw=por?W-109:W-39;  // keeps text clear of the mark circle and the portrait
-  const fit=t=>{ cx.font=FD; if(cx.measureText(t).width<=tw-14) return t; let q=t; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
-  const fitT=t=>{ cx.font=FT; let q=t; if(cx.measureText(q).width<=tw-14) return q; while(q.length>2&&cx.measureText(q+"…").width>tw-14) q=q.slice(0,-1); return q+"…"; };
-  const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl);
-  const til=tl?wrap(tl,FT,tw-14,2):[];
-  const NM=fitName(p.n,[17,15.5,14],tw-6,3,"700"); const MID=fitName(p.n,[32,28,25,22],W-40,3,"700");
-  return TX[id]={nm:NM.ls,nmf:NM.f,nmz:NM.z,mid:MID,dt:p.d?fit(p.d):"",pl:p.pl?fit(p.pl):"",ti:til,rab,dtl:1e9,dtc:fit,por}; }
+const TX={}; function txt(id){ if(TX[id]) return TX[id]; const p=P[id]; const por=por_(id);
+  // NOCUT_V1 (Alter Nov 8 7:57 PM "What is this cut off?"): nothing on a card is cut with "…". Text flows around the portrait
+  // (narrow beside it, full width under it); when it still does not fit, the card's fonts step down until it does.
+  const tl=(p.t||"").replace(/^לויט מסורה( · )?/,""); const rab=RAB.test(p.n||"")||RAB.test(tl); const mes=!!p.mes, cr=rab&&!mes;
+  const PB=84, MB=34;  // portrait bottom, mark-circle bottom (card units)
+  const rxAt=yb=>(por&&yb-15<PB)?W-83:W-13;
+  const wAt=(yb,k)=>rxAt(yb)-(yb-15<MB?34:13)-(k?12:0);
+  const wrapV=(t,font,y0,lh,first)=>{ cx.font=font; const w=String(t||"").split(/\s+/).filter(Boolean); const out=[]; let cur="", yb=y0;
+    for(const x of w){ const tr=cur?cur+" "+x:x; if(!cur||cx.measureText(tr).width<=wAt(yb,first&&!out.length)) cur=tr; else { out.push([cur,yb]); cur=x; yb+=lh; }
+      while(cx.measureText(cur).width>wAt(yb,first&&!out.length)&&cur.length>1){ let k=cur.length-1; while(k>1&&cx.measureText(cur.slice(0,k)).width>wAt(yb,first&&!out.length)) k--; out.push([cur.slice(0,k),yb]); cur=cur.slice(k); yb+=lh; } }  // a word wider than the card (a link) breaks inside
+    if(cur) out.push([cur,yb]); return out; };
+  let R=null;
+  for(const f of [1,0.94,0.88,0.82,0.76,0.7,0.64,0.58,0.52]){ const out=[];
+    let nm=[], nz=17*f, nf="";
+    for(const z0 of [17,15.5,14]){ nz=z0*f; nf='700 '+nz+'px FRL, "Frank Ruhl Libre", serif'; nm=wrapV(p.n,nf,13+nz,nz*1.22,cr); if(nm.length<=3) break; }
+    nm.forEach(([t,yb],k)=>out.push({t,yb,f:nf,c:0,k:k===0&&cr}));
+    let yy=nm.length?nm[nm.length-1][1]+nz*1.22+2:30; const lh=17*f;
+    const FTf='italic 400 '+(13.5*f)+'px FRL, "Frank Ruhl Libre", serif', FDf='400 '+(13*f)+'px FRL, "Frank Ruhl Libre", serif';
+    if(mes){ out.push({t:"לויט מסורה",yb:yy,f:'600 '+(12.5*f)+'px FRL, serif',c:2}); yy+=18*f; }
+    else if(tl){ const ls=wrapV(tl,FTf,yy,lh); for(const [t,yb] of ls) out.push({t,yb,f:FTf,c:rab?2:1}); yy+=ls.length*lh; }
+    const bl=[]; let yb=yy+2;
+    for(const t of [p.pl,p.d]){ if(!t) continue; const ls=wrapV(t,FDf,yb,lh); for(const [u,v] of ls) bl.push({t:u,yb:v,f:FDf,c:3}); yb+=ls.length*lh; }
+    const all=out.concat(bl), lastb=all.length?all[all.length-1].yb:30; let ok=lastb<=H-9;
+    if(ok) for(const o of all){ cx.font=o.f; if(cx.measureText(o.t).width>wAt(o.yb,o.k)+0.5){ ok=false; break; } }
+    if(ok||f<0.53){ if(bl.length){ const sh=Math.max(0,(H-12)-lastb); for(const o of bl) o.yb+=sh; }
+      for(const o of all) o.rx=rxAt(o.yb); R={L:all,fs:f,ok}; break; } }
+  return TX[id]={L:R.L,fs:R.fs,ok:R.ok,rab,cr,por}; }
 function meds(id){ const p=P[id]; if(p.media) return p.media.map(m=>({f:m.f,k:(m.k||"x")[0],cap:m.cap,cr:m.cr,u:m.u}));
   return (p.md||[]).map((m,i)=>({f:m[0],k:m[1],det:i})); }
 function por_(id){ const m=meds(id).find(x=>x.k==="p"); return m||null; }
@@ -313,15 +333,8 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
       cx.restore(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.lineWidth=Math.max(1.2,1/s); cx.strokeStyle=col; cx.stroke(); }
     rx=x+W-13-2*R-10; }
   cx.direction="rtl"; cx.textAlign="right"; cx.textBaseline="alphabetic";
-  let yy=y+30; if(T.rab&&!mes){ crest(rx-4,yy-6,4.4); }
-  cx.fillStyle=C.ink; cx.font=T.nmf; const off=T.rab&&!mes?12:0; const nlh=T.nmz*1.22;
-  T.nm.forEach((l,k)=>{ cx.fillText(l,rx-(k===0?off:0),yy); yy+=nlh; });
-  yy+=2;
-  if(mes){ cx.font='600 12.5px FRL, serif'; cx.fillStyle=C.gold; cx.fillText("לויט מסורה",rx,yy); yy+=18; }
-  else if(T.ti.length){ cx.font=FT; cx.fillStyle=T.rab?C.gold:C.ink2; for(const l of T.ti){ if(yy>y+H-30) break; cx.fillText(l,rx,yy); yy+=17; } }
-  cx.font=FD; cx.fillStyle=C.date;
-  const lines=[T.pl,T.dt].filter(Boolean); let yb=y+H-12-(lines.length-1)*17; yb=Math.max(yb,yy+2);
-  for(const l of lines){ if(yb>y+H-8) break; cx.fillText(l,rx,yb); yb+=17; }
+  { const CL=[C.ink,C.ink2,C.gold,C.date]; if(T.cr&&T.L.length){ const o=T.L[0]; crest(x+o.rx-4,y+o.yb-6,4.4*Math.max(0.8,T.fs)); }
+    for(const o of T.L){ cx.font=o.f; cx.fillStyle=CL[o.c]; cx.fillText(o.t,x+o.rx-(o.k?12:0),y+o.yb); } }  // NOCUT_V1
   cx.direction="ltr";
   markAt(x+18,y+21,m,10.5); if(hl) newBadge(x+W-8,y-6,1); }
 /* ---------- full cards at every zoom (Alter Nov 8 7:08 PM): below FULLD (card width on screen, css px) each card is its own
