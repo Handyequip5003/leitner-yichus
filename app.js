@@ -2,11 +2,27 @@
 "use strict";
 const D=window.YDATA; const P=D.people, UP=D.up||{}, LM=D.linkm||{};
 const ROOT=D.root||"alter";
+/* marriage line colour (Alter Nov 8 7:20 PM: "another color"): double line + ⚭ rings */
+const MARRIAGE_COLOR="#7B2D3A";
+/* side pills (Alter Nov 8 7:08 PM): jump to the 4 grandparents on each side.
+   from: "root" = Alter, "wife" = his wife. path: 0 = father, 1 = mother (from → parent → grandparent). id: set to fix a card directly; alt: ids tried if the path has no card yet; name: else the one card whose name holds this word.
+   label: pill text (a bare "זיידע"/"באבע" gets the card's family name added). rel: the small second line. A slot not yet in the data shows grey "נאך נישט באקאנט". */
+const PILLS=[
+  {g:"מיין זייט", from:"root", items:[
+    {path:[0,0], label:"זיידע לייטנער",    rel:"טאטע'ס טאטע"},
+    {path:[0,1], label:"באבע וואגשאהל",    rel:"טאטע'ס מאמע"},
+    {path:[1,0], label:"זיידע טארים",      rel:"מאמע'ס טאטע"},
+    {path:[1,1], label:"באבע וויינבערגער", rel:"מאמע'ס מאמע"} ]},
+  {g:"מיין ווייב'ס זייט", from:"wife", items:[
+    {path:[0,0], label:"זיידע ראבינאוויטש",  rel:"שווער'ס טאטע"},
+    {path:[1,0], label:"זיידע מענדלאוויטש", rel:"שוויגער'ס טאטע", alt:["mendel_avraham"], name:"מענדלאוויטש"},
+    {path:[0,1], label:"באבע",               rel:"שווער'ס מאמע"},
+    {path:[1,1], label:"באבע",               rel:"שוויגער'ס מאמע"} ]} ];
 /* settings (Alter Nov 8 6:27 PM): by default only the direct line up (parents, grandparents and higher); siblings behind ⚙ */
 const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs}; })();
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
-const cv=document.getElementById("cv"), cx=cv.getContext("2d");
-const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:"#94702f",lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
+const cv=document.getElementById("cv"); let cx=cv.getContext("2d");
+const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:MARRIAGE_COLOR,lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
 const BRC={B:"#9c2f6e",L:"#7a4b2a",Y:"#7b7436",W:"#2f6b55",S:"#2d5f8a",R:"#a0532f",M:"#5a4a8c",T:"#8c2f3d",H:"#6e5a1f",K:"#0e7f8a",V:"#55606f",G:"#7d5a78"};
 const bc=id=>BRC[(P[id]&&P[id].br)||"L"]||BRC.L;
 const MKC={ok:["#5b7a3a","✓"],alt:["#2f6b55","א"],inf:["#c08a2b","≈"],unv:["#a33","?"]};
@@ -230,10 +246,12 @@ function draw(){
     for(const k of KIDS) if(sel===k||sel===ROOT||(FAM&&sel===FAM.sp)) kidLink(k,true);
     for(const r of XR){ if(r.c===sel||r.p===sel){ cx.strokeStyle=bc(r.p); cx.lineWidth=lw*2.4; poly(r.pts,rad); } }
     for(const [sb,an] of SIBL){ if(sb===sel||an===sel){ const n2=N[sb],a3=N[an]; cx.strokeStyle=bc(an); cx.lineWidth=lw*1.8; poly([[n2.x,n2.y],[n2.x,n2.y-GAP/2],[a3.x,a3.y-GAP/2]],rad); } } }
-  const lod=s*W; let drawn=0;
+  const lod=s*W; let drawn=0; sprUse++; sprMiss=0; sprT=performance.now()+(ptr.size||anim?7:14);
   for(let d=d0;d<=d1;d++){ const row=rows[d]; if(!row) continue;
     let lo=0,hi=row.length; while(lo<hi){ const m=(lo+hi)>>1; if(N[row[m]].x+W/2<x0) lo=m+1; else hi=m; }
-    for(let i=lo;i<row.length;i++){ const id=row[i], n=N[id]; if(n.x-W/2>x1) break; drawn++; card(id,n,lod); } }
+    for(let i=lo;i<row.length;i++){ const id=row[i], n=N[id]; if(n.x-W/2>x1) break; drawn++; if(lod>=FULLD) card(id,n,lod); else cardS(id,n,lod); } }
+  if(sprMiss) dirty=true;
+  if(PULSE) pulse();
   // dashed stubs for the rare far-away second line: tap flies to the one real card
   if(STUBS.length&&lod>=20){ for(const t of STUBS){ if(t.x+t.w/2<x0||t.x-t.w/2>x1||t.y+t.h<y0||t.y>y1) continue;
       cx.save(); cx.setLineDash([6,5]); cx.lineWidth=Math.max(1.6,1.2/s); cx.strokeStyle=bc(t.p); cx.fillStyle="rgba(255,250,240,.96)"; rr(t.x-t.w/2,t.y,t.w,t.h,10); cx.fill(); cx.stroke(); cx.setLineDash([]);
@@ -244,18 +262,15 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   const hl=wnOn&&NEWSET.has(id);
   if(hl){ cx.save(); cx.shadowColor="rgba(214,170,60,.9)"; cx.shadowBlur=28*Math.min(1,s*2)+6; cx.fillStyle="rgba(230,190,90,.55)"; rr(x-10,y-10,W+20,H+20,16); cx.fill(); cx.restore();
     cx.lineWidth=Math.max(3,3/s); cx.strokeStyle="#c9a35c"; rr(x-7,y-7,W+14,H+14,14); cx.stroke(); }
-  if(lod<34){ cx.fillStyle=C.card; cx.fillRect(x,y,W,H); cx.fillStyle=col; cx.fillRect(x,y,W,14); if(id===sel){cx.strokeStyle=C.sel;cx.lineWidth=3/s;cx.strokeRect(x,y,W,H);} return; }
   cx.fillStyle="rgba(80,55,20,.10)"; rr(x+1,y+3,W,H,10); cx.fill();   // soft shadow (no blur)
   rr(x,y,W,H,10); cx.fillStyle=mes?C.cardMes:root?"#fffdf5":C.card; cx.fill();
   cx.lineWidth=Math.max(1,0.9/s); cx.strokeStyle=id===sel?C.sel:root?C.gold:C.edge; if(mes) cx.setLineDash([5,4]); cx.stroke(); cx.setLineDash([]);
   if(id===sel||root){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
   // family-colour top edge
   cx.save(); rr(x,y,W,H,10); cx.clip(); cx.fillStyle=col; cx.fillRect(x,y,W,root?7:5); cx.restore();
-  if(lod<140){ const M=txt(id).mid; cx.fillStyle=C.ink; cx.font=M.f; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl";
-    const lh=M.z*1.12, n0=M.ls.length; let yy=y+H/2+6-(n0-1)*lh/2; for(const l of M.ls){ cx.fillText(l,n.x,yy); yy+=lh; } cx.direction="ltr"; markAt(x+16,y+20,m,10); if(hl) newBadge(x+W-6,y-14,1.8); return; }
   const T=txt(id); let rx=x+W-13;
   if(T.por){ const R=30, pcx=x+W-13-R, pcy=y+16+R+4;
-    if(lod>105){ const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
+    { const im=img(SRC(T.por.f,"m")); cx.save(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.closePath(); cx.clip();
       if(im){ const r=Math.max(2*R/im.width,2*R/im.height); cx.drawImage(im,pcx-im.width*r/2,pcy-R-(im.height*r-2*R)*0.2,im.width*r,im.height*r); } else { cx.fillStyle="#efe5cf"; cx.fill(); }
       cx.restore(); cx.beginPath(); cx.arc(pcx,pcy,R,0,7); cx.lineWidth=Math.max(1.2,1/s); cx.strokeStyle=col; cx.stroke(); }
     rx=x+W-13-2*R-10; }
@@ -271,6 +286,65 @@ function card(id,n,lod){ const p=P[id], x=n.x-W/2, y=n.y, m=p.m||"unv", mes=p.me
   for(const l of lines){ if(yb>y+H-8) break; cx.fillText(l,rx,yb); yb+=17; }
   cx.direction="ltr";
   markAt(x+18,y+21,m,10.5); if(hl) newBadge(x+W-8,y-6,1); }
+/* ---------- full cards at every zoom (Alter Nov 8 7:08 PM): below FULLD (card width on screen, css px) each card is its own
+   full drawing kept as a small bitmap and scaled — same content, just smaller. Bitmaps are made on demand (a time budget per frame),
+   pre-made when idle, and dropped least-recently-used past SPMAX bytes. ---------- */
+const FULLD=90, SPB=[24,32,48,64,96,128,192], SPR=new Map(), SPMAX=56e6, SPAD=8; let sprBytes=0, sprUse=0, sprT=0, sprMiss=0;
+function sprB(dw){ for(const b of SPB) if(b>=dw) return b; return SPB[SPB.length-1]; }
+function sprMake(id,B){ const n=N[id], k=B/W, cw=Math.ceil((W+2*SPAD)*k), ch=Math.ceil((H+2*SPAD)*k);
+  const cvs=document.createElement("canvas"); cvs.width=cw; cvs.height=ch; const g=cvs.getContext("2d");
+  const o={c:cvs,w:cw/k,h:ch/k,pend:null,u:sprUse,b:cw*ch*4};
+  const sv=cx, ss=s, ssel=sel, swn=wnOn; cx=g; s=k/dpr; sel=null; wnOn=false;
+  try{ g.setTransform(k,0,0,k,(SPAD-(n.x-W/2))*k,(SPAD-n.y)*k); card(id,n,999);
+    const T=txt(id); if(T.por){ const src=SRC(T.por.f,"m"); if(!(IMG[src]&&IMG[src].ok)) o.pend=src; } }
+  finally{ cx=sv; s=ss; sel=ssel; wnOn=swn; }
+  const key=id+"|"+B, old=SPR.get(key); if(old) sprBytes-=old.b; SPR.set(key,o); sprBytes+=o.b; if(sprBytes>SPMAX) sprTrim(); return o; }
+function sprTrim(){ const e=[...SPR.entries()].sort((p,q)=>p[1].u-q[1].u); for(const [k,o] of e){ if(sprBytes<SPMAX*0.7) break; if(o.u>=sprUse) continue; SPR.delete(k); sprBytes-=o.b; } }
+function sprAny(id,B){ let best=null, bd=1e9; for(const b of SPB){ const o=SPR.get(id+"|"+b); if(o){ const d=b>=B?b-B:(B-b)*3; if(d<bd){ bd=d; best=o; } } } return best; }
+function cardS(id,n,lod){ const x=n.x-W/2, y=n.y, B=sprB(lod*dpr); let o=SPR.get(id+"|"+B);
+  const stale=o&&o.pend&&IMG[o.pend]&&IMG[o.pend].ok;
+  if(!o||stale){ if(performance.now()<sprT) o=sprMake(id,B); else { sprMiss++; if(!o) o=sprAny(id,B); } }
+  const hl=wnOn&&NEWSET.has(id);
+  if(hl){ cx.save(); cx.shadowColor="rgba(214,170,60,.9)"; cx.shadowBlur=28*Math.min(1,s*2)+6; cx.fillStyle="rgba(230,190,90,.55)"; rr(x-10,y-10,W+20,H+20,16); cx.fill(); cx.restore();
+    cx.lineWidth=Math.max(3,3/s); cx.strokeStyle="#c9a35c"; rr(x-7,y-7,W+14,H+14,14); cx.stroke(); }
+  if(o){ o.u=sprUse; cx.drawImage(o.c,x-SPAD,y-SPAD,o.w,o.h); }
+  else { cx.fillStyle=C.card; cx.fillRect(x,y,W,H); cx.fillStyle=bc(id); cx.fillRect(x,y,W,14); }
+  if(id===sel){ cx.lineWidth=Math.max(2,2/s); cx.strokeStyle=C.sel; rr(x-2,y-2,W+4,H+4,12); cx.stroke(); }
+  if(hl) newBadge(x+W-6,y-14,1.8); }
+let warmed=false;
+function sprWarm(){ const ids=Object.keys(N); let i=0; const B=sprB(28*dpr);
+  const step=()=>{ const end=performance.now()+8; while(i<ids.length&&performance.now()<end){ const id=ids[i++]; if(!SPR.has(id+"|"+B)) sprMake(id,B); } if(i<ids.length) sched(); };
+  const sched=()=>{ if(window.requestIdleCallback) requestIdleCallback(step,{timeout:3000}); else setTimeout(step,40); };
+  setTimeout(sched,700); }
+/* ---------- side pills: jump to each grandparent ---------- */
+let PULSE=null;
+function pulse(){ const n=N[PULSE.id], k=(performance.now()-PULSE.t0)/2600; if(!n||k>=1){ PULSE=null; dirty=true; return; }
+  const a=Math.max(0,Math.sin(k*Math.PI*3))*(1-k*0.5), x=n.x-W/2, y=n.y, gr=10+18*a;
+  cx.save(); cx.globalAlpha=0.35+0.65*a; cx.shadowColor="rgba(240,180,40,.95)"; cx.shadowBlur=24; cx.lineWidth=Math.max(5,4/s); cx.strokeStyle="#e8a91c";
+  rr(x-gr,y-gr,W+2*gr,H+2*gr,14+gr*0.4); cx.stroke(); cx.restore(); dirty=true; }
+function pillId(grp,it){ if(it.id) return N[it.id]?it.id:null; let id=grp.from==="wife"?(FAM&&FAM.sp):ROOT;
+  for(const k of it.path){ if(!id) break; const u=UP[id]||[]; id=u[k]||null; } if(id&&N[id]) return id;
+  for(const a of it.alt||[]) if(N[a]) return a;
+  if(it.name){ const m=Object.keys(N).filter(k=>String(P[k].n||"").includes(it.name)); if(m.length===1) return m[0]; } return null; }
+function pillName(it,id){ let l=it.label||(it.path[it.path.length-1]?"באבע":"זיידע"); if(!id||/\s/.test(l)) return l;
+  const nm=String(P[id].n||"").split(/\s[–-]\s/)[0].replace(/\s*(שליט"א|ע"ה|ז"ל|זצ"ל|זצוק"ל|הי"ד|נ"ע)\s*/g," ").trim().split(/\s+/); return l+" "+(nm[nm.length-1]||""); }
+function pillJump(id){ const sh=document.getElementById("sheet"); if(sh&&sh.classList.contains("on")&&typeof closeSheet==="function") closeSheet();
+  sel=id; const n=N[id]; const ns=Math.max(0.6,Math.min(1,s<0.6?0.75:s)); const pb=document.getElementById("pills"), pr=pb&&!pb.classList.contains("shut")?pb.getBoundingClientRect().right:0, cxs=pr&&vw<900?(vw+pr)/2:vw/2;
+  animTo(ns,cxs-n.x*ns,vh*0.45-(n.y+H/2)*ns,Math.min(1400,700+Math.hypot(vw/2-n.x*s-tx,vh/2-n.y*s-ty)*0.15));
+  PULSE={id,t0:performance.now()}; dirty=true; }
+(function pills(){ const box=document.createElement("div"); box.id="pills"; box.setAttribute("dir","rtl");
+  const PK="yichus_pills_v1"; let shut=false; try{ shut=localStorage.getItem(PK)==="0"; }catch(e){}
+  const tog=document.createElement("button"); tog.className="pltog"; tog.type="button";
+  const body=document.createElement("div"); body.className="plbody";
+  const setShut=v=>{ shut=v; box.classList.toggle("shut",v); tog.textContent=v?"זיידעס ›":"‹ באהאלט"; tog.title=v?"ווייז די זיידעס און באבעס":"באהאלט"; try{ localStorage.setItem(PK,v?"0":"1"); }catch(e){} };
+  tog.onclick=()=>setShut(!shut);
+  for(const grp of PILLS){ const h=document.createElement("div"); h.className="plh"; h.textContent=grp.g; body.appendChild(h);
+    for(const it of grp.items){ const id=pillId(grp,it); const b=document.createElement("button"); b.type="button"; b.className="pill"+(id?"":" unk");
+      const t1=document.createElement("b"); t1.textContent=pillName(it,id); const t2=document.createElement("small"); t2.textContent=id?(it.rel||""):"נאך נישט באקאנט";
+      b.appendChild(t1); b.appendChild(t2);
+      if(id){ b.style.setProperty("--pc",bc(id)); b.title=P[id].n; b.onclick=()=>pillJump(id); } else { b.disabled=true; b.title=(it.rel||"")+" · נאך נישט באקאנט"; }
+      body.appendChild(b); } }
+  box.appendChild(tog); box.appendChild(body); document.body.appendChild(box); setShut(shut); })();
 function newBadge(xr,yt,k){ const w=46*k,h=22*k; cx.fillStyle="#b08d57"; rr(xr-w,yt,w,h,h/2); cx.fill(); cx.fillStyle="#fff"; cx.font="700 "+(13*k)+"px FRL, serif"; cx.textAlign="center"; cx.textBaseline="middle"; cx.direction="rtl"; cx.fillText("נייַ",xr-w/2,yt+h/2+1); cx.direction="ltr"; }
 let raf=0; function loop(){ raf=requestAnimationFrame(loop); if(inertia()) dirty=true; if(dirty) draw(); }
 /* ---------- gestures: pan with inertia, pinch, wheel, tap, double-tap ---------- */
@@ -396,5 +470,5 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
 home(); loop();
 (function fromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h) return; const [id,z]=h.split("/"); if(!P[id]) return; if(N[id]) focus(id,Math.max(0.75,s)); openSheet(id);
   if(z&&z[0]==="z") details(id).then(()=>setTimeout(()=>openZoom(+z.slice(1)||0),120)); })();
-if(document.fonts&&document.fonts.load){ document.fonts.load(FN).then(()=>{ for(const k in TX) delete TX[k]; dirty=true; }); }
+if(document.fonts&&document.fonts.load){ document.fonts.load(FN).then(()=>{ for(const k in TX) delete TX[k]; SPR.clear(); sprBytes=0; dirty=true; sprWarm(); }); }
 window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};

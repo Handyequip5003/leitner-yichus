@@ -82,3 +82,16 @@ button.x{position:absolute;top:10px;left:10px;width:36px;height:36px;border-radi
 .hidn{font:400 14px/1.5 FRL,serif;color:#6b5636;background:#f6edd8;border:1px solid #e2d3b3;border-radius:8px;padding:8px 10px;margin:6px 0 8px}
 .hidn button{margin-top:6px;display:block;border:1px solid #b08d57;background:#b08d57;color:#fff;border-radius:14px;padding:5px 12px;font:700 14px/1.2 FRL,serif}
 .hidn{margin-left:40px}
+/* side pills: jump to the grandparents (Nov 9) */
+#pills{position:fixed;z-index:4;left:max(6px,env(safe-area-inset-left));top:50%;transform:translateY(-55%);display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-height:calc(100vh - 150px);pointer-events:none}
+#pills>*{pointer-events:auto}
+#pills .pltog{border:1px solid rgba(168,128,60,.55);background:rgba(255,250,240,.92);color:#5d4a30;border-radius:12px;padding:3px 8px;font:700 11px/1.2 FRL,serif;cursor:pointer;box-shadow:0 1px 4px rgba(60,40,10,.12)}
+#pills .plbody{display:flex;flex-direction:column;gap:3px;overflow-y:auto;padding:2px 2px 4px;max-width:112px}
+#pills.shut .plbody{display:none}
+#pills .plh{font:700 10.5px/1.2 FRL,serif;color:#5d4a30;background:rgba(255,250,240,.85);border-radius:8px;padding:2px 6px;margin-top:2px;text-align:right}
+#pills .pill{display:flex;flex-direction:column;align-items:flex-start;text-align:right;border:0;border-radius:13px;padding:3px 9px 3px 8px;background:var(--pc,#8a7a5c);color:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(40,25,5,.28);min-width:82px}
+#pills .pill b{font:700 12px/1.15 FRL,serif;white-space:nowrap}
+#pills .pill small{font:400 9.5px/1.15 FRL,serif;opacity:.88;white-space:nowrap}
+#pills .pill:active{filter:brightness(1.12);transform:scale(.97)}
+#pills .pill.unk{background:#e3dccd;color:#8c7f68;box-shadow:none;cursor:default}
+#pills .pill.unk small{opacity:1}
