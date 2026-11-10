@@ -14,7 +14,7 @@ const PILLS=[
     {path:[1,0], label:"משפחת מענדלאוויטש", rel:"מאמע'ס טאטע", alt:["mendel_avraham"], name:"מענדלאוויטש"},
     {path:[1,1], label:"משפחת ווייס",         rel:"מאמע'ס מאמע"} ]} ];
 /* settings (Alter Nov 8 6:27 PM): by default only the direct line up (parents, grandparents and higher); siblings behind ⚙ */
-const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs, see:!!o.see}; })();  // SEEABOVE_TOGGLE_V1: see = "זעה אויבן" lines
+const SETK="yichus_settings_v1"; const SET=(()=>{ let o={}; try{ o=JSON.parse(localStorage.getItem(SETK)||"{}")||{}; }catch(e){} return {sibs:!!o.sibs, see:!!o.see, wn:!!o.wn}; })();  // WNHIDE_V1 (Alter Nov 10 8:38): what's-new button hidden unless turned on in ⚙  // SEEABOVE_TOGGLE_V1: see = "זעה אויבן" lines
 function saveSet(){ try{ localStorage.setItem(SETK,JSON.stringify(SET)); }catch(e){} }
 const cv=document.getElementById("cv"); let cx=cv.getContext("2d");
 const C={card:"#fffaf0",cardMes:"#fbf4e2",edge:"#d8c6a1",ink:"#24180a",ink2:"#5d4a30",date:"#6b5636",gold:"#a8803c",mar:MARRIAGE_COLOR,lineX:"rgba(176,86,63,.28)",sel:"#b08d57"};
@@ -542,7 +542,7 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
     while(el&&el.nodeType===1&&el!==document.body){ if(el.scrollWidth>el.clientWidth+2){ const cs=getComputedStyle(el); const ox=cs.overflowX; if((ox==="auto"||ox==="scroll")&&el.scrollHeight<=el.clientHeight+2){ const rtl=cs.direction==="rtl"; const b0=el.scrollLeft; el.scrollLeft+=(rtl&&Math.abs(e.deltaX)<=Math.abs(e.deltaY))?-d:d; if(el.scrollLeft!==b0){ e.preventDefault(); return; } } } el=el.parentElement; } },{passive:false}); })();
 /* what's new controls */
 (function(){ const bt=document.getElementById("wn"), bar=document.getElementById("wnb"), t=document.getElementById("wnt");
-  if(!LN||!NEWS.length) return; bt.hidden=false; const ni=LN.n_items||NEWS.length; document.getElementById("wnc").textContent=ni;
+  if(!LN||!NEWS.length) return; window.__wnShow=v=>{ bt.hidden=!v; if(!v){ wnOn=false; bt.classList.remove("on"); bar.hidden=true; dirty=true; } }; bt.hidden=!SET.wn; const ni=LN.n_items||NEWS.length; document.getElementById("wnc").textContent=ni;
   const lab=()=>{ t.textContent=(wnI>=0?(wnI+1)+" / "+NEWS.length+" · ":"")+ni+" נייַע זאַכן אין "+NEWS.length+" קאַרטלעך"; };
   const go=k=>{ wnI=(k+NEWS.length)%NEWS.length; const id=NEWS[wnI]; sel=id; if(N[id]) focus(id,Math.max(s,0.75)); lab(); dirty=true; };
   bt.onclick=()=>{ wnOn=!wnOn; bt.classList.toggle("on",wnOn); bar.hidden=!wnOn; wnI=-1; lab(); dirty=true; if(wnOn) go(0); if(sheet.classList.contains("on")&&sel) openSheet(sel); };
@@ -562,6 +562,9 @@ addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(zv.classList.contains("
   { const lb=document.createElement("label"); lb.className="sw"; lb.innerHTML='<input type="checkbox" id="s_see"><span class="tg"></span><span class="stl">ליניעס צו \'זעה אויבן\'<small>א געשטריכלטע ליניע פון יעדן \'זעה אויבן\' ביז צום קארטל פון דער מענטש (<span id="s_seen"></span> ליניעס)</small></span>';
     pn.appendChild(lb); const c2=lb.querySelector("input"); c2.checked=!!SET.see; lb.querySelector("#s_seen").textContent=SEEL.length;
     c2.onchange=()=>{ SET.see=c2.checked; saveSet(); dirty=true; }; }  // SEEABOVE_TOGGLE_V1
+  { const lb=document.createElement("label"); lb.className="sw"; lb.innerHTML='<input type="checkbox" id="s_wn"><span class="tg"></span><span class="stl">ווייז "וואָס איז נייַ"<small>א קנעפל וואס ווייזט די נייע זאכן וואס זענען צוגעקומען לעצטנס</small></span>';
+    pn.appendChild(lb); const c3=lb.querySelector("input"); c3.checked=!!SET.wn;
+    c3.onchange=()=>{ SET.wn=c3.checked; saveSet(); if(window.__wnShow) window.__wnShow(SET.wn); }; }  // WNHIDE_V1
   { /* STATS_V1 (Alter 9:57 PM Nov 8): how many people, how many with a face picture, how many with a known kever – counted from the data at page load */
     const ids=Object.keys(P).filter(id=>!P[id].sibof), n=ids.length, hasQ=ids.some(id=>P[id].q);
     const cnt=ch=>ids.filter(id=>{ const p=P[id]; if(hasQ) return (p.q||"").includes(ch); const md=p.md||[]; return ch==="i"?md.length>0:md.some(m=>m[1]===(ch==="f"?"p":"k")); }).length;
