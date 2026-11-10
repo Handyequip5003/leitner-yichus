@@ -694,3 +694,349 @@ window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};
   window.__lg={open:()=>bt.onclick()};
 })();
 /* /LEGEND_V1 */
+
+/* SEARCH_V1 (Alter 9:54 PM Nov 9 "add a search icon next to the settings that I can search anything"; 9:55 PM "make it a real smart search, the best search bar possible") — worker 16a4bfd2.
+   🔍 beside ⚙ opens a search panel. Searches names (main, alternate, maiden), titles, places, dates, notes, sources and picture captions.
+   Detail text comes from sidx.json (built at publish time by search_patch.py --index; on the PIN site it is answered decrypted by libby.js).
+   Smart parts: niqqud/final letters/spaces ignored, Yiddish/Latin spelling variants, typos, Hebrew <-> Latin sound match, place and name synonyms,
+   relations (קינדער פון X, בת X, son of X, A בן B), years and ranges (1916, תרע"ו, 1880s, 1880-1890), yahrzeit dates (ט"ו כסלו), titles (רבי פון סאטמאר).
+   Living people: name only. */
+(function(){
+  if(document.getElementById("srb")) return;
+  const gear=document.getElementById("gear"), pn=document.getElementById("setp");
+  const $=id=>document.getElementById(id);
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  /* ---------- normalising ---------- */
+  const LIGA={"\u05f0":"וו","\u05f1":"וי","\u05f2":"יי"}, FINL={"ך":"כ","ם":"מ","ן":"נ","ף":"פ","ץ":"צ"}, SPEC={"ß":"ss","ł":"l","Ł":"l","ø":"o","Ø":"o","æ":"ae","œ":"oe","đ":"d","ı":"i"};
+  const QCH=/["'`\u05f3\u05f4\u2018\u2019\u201c\u201d\u201e]/g;
+  function prep(s){ s=String(s||"").replace(/[\u0591-\u05bd\u05bf-\u05c7]/g,"").replace(/[\u05f0-\u05f2]/g,c=>LIGA[c]).replace(/[ךםןףץ]/g,c=>FINL[c]).replace(/[ßłŁøØæœđı]/g,c=>SPEC[c]);
+    return s.normalize("NFD").toLowerCase().replace(/[\u0300-\u036f]/g,"").replace(QCH,""); }
+  function nz(s){ return prep(s).replace(/[^a-z0-9\u05d0-\u05ea]/g,""); }
+  /* the same, but words stay apart (a space between them): the loose forms and the notes use it, so a match cannot run across two words */
+  function nzK(s){ return prep(s).replace(/[^a-z0-9\u05d0-\u05ea]+/g," ").trim(); }
+  const NZC=new Map(); const nzc=c=>{ let v=NZC.get(c); if(v===undefined){ v=nz(c); if(!v&&!QCH.test(c)&&!/[\u0591-\u05c7\u0300-\u036f]/.test(c)) v=" "; QCH.lastIndex=0; NZC.set(c,v); } return v; };
+  /* normalised text with a map back to the original positions (only for highlighting a few rows); sp: keep word gaps */
+  function nzMap(s,sp){ s=String(s||""); const o=[], m=[]; for(let i=0;i<s.length;i++){ const p=nzc(s[i]); if(p===" "){ if(sp&&o.length&&o[o.length-1]!==" "){ o.push(" "); m.push(i); } continue; } for(const ch of p){ o.push(ch); m.push(i); } } return [o.join(""),m]; }
+  const LR=[["w","v"],["vitsch","viz"],["vitch","viz"],["vich","viz"],["vics","viz"],["vicz","viz"],["sch","s"],["sz","s"],["cz","c"],["tz","z"],["ts","z"],["ph","f"],["ck","k"],["y","i"],["j","i"],["ei","ai"],["ey","ai"],
+    ["וו","ו"],["יי","י"],["טש","צ"],["ע","א"],["ש","ס"],["א",""]];
+  function lz(s){ for(const [a,b] of LR) s=s.split(a).join(b); return s.replace(/(.)\1+/g,"$1"); }
+  function lzMap(s,m){ let a=s.split(""), mm=m.slice();
+    for(const [x,y] of LR){ if(s.indexOf(x)<0) continue; const na=[], nm=[]; let i=0; while(i<a.length){ let hit=true; for(let k=0;k<x.length;k++) if(a[i+k]!==x[k]){ hit=false; break; }
+        if(hit){ for(const ch of y){ na.push(ch); nm.push(mm[i]); } i+=x.length; } else { na.push(a[i]); nm.push(mm[i]); i++; } }
+      a=na; mm=nm; s=a.join(""); }
+    const fa=[], fm=[]; for(let i=0;i<a.length;i++){ if(i&&a[i]===a[i-1]) continue; fa.push(a[i]); fm.push(mm[i]); } return [fa.join(""),fm]; }
+  /* sound key, the same for Hebrew letters and Latin letters, so Akiva = עקיבא, Schlesinger = שלעזינגער */
+  const HK={"ב":"B","ג":"G","ד":"D","ז":"S","ח":"K","ט":"T","כ":"K","ל":"L","מ":"M","נ":"N","ס":"S","פ":"P","צ":"S","ק":"K","ר":"R","ש":"S","ת":"T"};
+  const LK={b:"B",v:"B",w:"B",f:"P",p:"P",d:"D",g:"G",k:"K",q:"K",x:"K",l:"L",m:"M",n:"N",r:"R",s:"S",z:"S",t:"T"};
+  function pk(w){ if(!w) return ""; let o=""; let i=0;
+    if(/[\u05d0-\u05ea]/.test(w[0])){ if(w[0]==="א"||w[0]==="ע") { o="_"; i=1; } else if(w[0]==="י"){ o="Y"; i=1; } else if(w[0]==="ה"){ o="K"; i=1; }
+      for(;i<w.length;i++){ const c=w[i];
+        if(c==="ו"){ if(w[i+1]==="ו"){ o+="B"; i++; } continue; }
+        if(c==="ט"&&w[i+1]==="ש"){ o+="S"; i++; continue; }
+        const k=HK[c]; if(k) o+=k; } }
+    else { if("aeiou".includes(w[0])){ o="_"; i=1; } else if(w[0]==="y"||w[0]==="j"){ o="Y"; i=1; } else if(w[0]==="h"){ o="K"; i=1; }
+      for(;i<w.length;i++){ const c=w[i], n=w[i+1]||"";
+        if(c==="s"&&n==="c"&&w[i+2]==="h"){ o+="S"; i+=2; continue; }
+        if((c==="s"&&(n==="h"||n==="z"))||(c==="t"&&(n==="z"||n==="s"))||(c==="c"&&n==="z")||(c==="z"&&n==="s")){ o+="S"; i++; continue; }
+        if((c==="c"||c==="k")&&n==="h"){ o+="K"; i++; continue; }
+        if(c==="c"&&n==="k"){ o+="K"; i++; continue; }
+        if(c==="p"&&n==="h"){ o+="P"; i++; continue; }
+        if(c==="t"&&n==="h"){ o+="T"; i++; continue; }
+        if(c==="c"){ o+=("eiy".includes(n)?"S":"K"); continue; }
+        const k=LK[c]; if(k) o+=k; } }
+    return o.replace(/(.)\1+/g,"$1"); }
+  function ed(a,b,mx){ const la=a.length, lb=b.length; if(Math.abs(la-lb)>mx) return mx+1; let pr=new Array(lb+1); for(let j=0;j<=lb;j++) pr[j]=j;
+    for(let i=1;i<=la;i++){ const cu=[i]; let best=i; for(let j=1;j<=lb;j++){ const v=Math.min(pr[j]+1,cu[j-1]+1,pr[j-1]+(a[i-1]===b[j-1]?0:1)); cu.push(v); if(v<best) best=v; }
+      if(best>mx) return mx+1; pr=cu; } return pr[lb]; }
+  /* ---------- synonyms: places, families, given names (Hebrew / Yiddish / Latin forms) ---------- */
+  const SYN=[
+   ["גרויסווארדיין","ווארדיין","נאגיוואראד","נאדיוואראד","אראדעא","oradea","nagyvarad","grosswardein","wardein","varad"],
+   ["סאטמאר","satmar","szatmar","szatmarnemeti","satumare"],["סיגעט","sighet","sziget","maramarossziget","sighetumarmatiei"],
+   ["קאשוי","קאשא","kosice","kassa","kaschau"],["מאלדאווא","מילדוי","moldava","szepsi","moldavanadbodvou"],["קלויזנבורג","קלוזש","cluj","kolozsvar","klausenburg"],
+   ["מאראשוואשארהעלי","טרגו מורעש","targumures","marosvasarhely"],["פרעשבורג","פרשבורג","pressburg","bratislava","pozsony"],["קראקא","קראקע","krakow","cracow","krakau"],
+   ["לעמבערג","למברג","לבוב","lemberg","lwow","lviv","lvov"],["טארנא","טארנוב","tarnow"],["ראצפערט","ujfeherto"],["נירעדהאז","nyiregyhaza"],["ראדאמישלא","radomysl"],
+   ["לאנצהוט","לאנצעט","lancut"],["באלאשדיארמאט","balassagyarmat"],["ביאליסטאק","bialystok"],["ריישא","rzeszow"],["אויהעל","אוהעל","אויהל","ujhely","satoraljaujhely"],
+   ["ווישניצא","וויזשניץ","vizhnitz","viznitz","vyzhnytsia"],["קשאנוב","chrzanow"],["ווילנא","ווילנע","vilna","vilnius","wilno"],["פראנקפורט","frankfurt"],["ווין","vienna","wien"],
+   ["פראג","prague","praha","prag"],["ירושלים","jerusalem"],["צפת","safed","tzfat"],["וויליאמסבורג","williamsburg"],["מאנסי","monsey"],["מאנרא","קרית יואל","monroe","kiryasjoel"],
+   ["ברוקלין","brooklyn"],["ניו יארק","נוי יארק","newyork"],["צאנז","sanz","nowysacz","sandz"],["באבאוו","bobov","bobowa"],["בעלזא","belz"],["מונקאטש","munkacs","mukachevo","munkatsch"],
+   ["אוישוויץ","אושוויץ","auschwitz","oswiecim"],["בודאפעסט","budapest"],["דעברעצין","debrecen"],["גאלאנטא","galanta"],["שאראש פאטאק","sarospatak"],["טאשנאד","tasnad"],
+   ["זערינד","zerind"],["פוטנאק","putnok"],["אייזנשטאט","eisenstadt"],["פרעמישלא","פשעמישל","przemysl"],["דזשיקוב","dzikow"],["ראפשיץ","ropczyce"],["ליזענסק","ליזשענסק","lezajsk"],
+   ["בערעגסאז","beregszasz","berehove"],["הר הזיתים","mountofolives"],["ברגן בעלזן","bergenbelsen"],["אונגארן","hungary","ungarn","magyarorszag"],["גאליציע","galicia","galizien"],
+   ["רומעניע","romania","rumania"],["סלאוואקיי","slovakia"],["אמעריקע","america","usa"],
+   ["לייטנער","leitner","lajtner","laitner"],["וואגשאהל","וואגשאל","ווגשאל","wagschal","wagshal"],["רובין","rubin"],["מייזליש","מייזעלס","meisels","meisel"],["טייטלבוים","teitelbaum"],
+   ["האלבערשטאם","halberstam"],["שפירא","שפירו","shapira","spira","shapiro","spiro"],["מאיער","מייער","meyer","mayer","maier"],["טארים","tarim"],["וויינבערגער","weinberger"],
+   ["שווארץ","schwartz","schwarz"],["ראבינאוויטש","רבינוביץ","rabinowitz","rabinovits","rabinovich","rabinowicz","rabinovitch"],["קרישעווסקי","krishevsky","kryszewski"],
+   ["מענדלאוויטש","mendlowitz","mendelowitz","mendelovits","mendlovits"],["ווייס","weiss","weisz","vajsz"],["וויינפעלד","weinfeld","vajnfeld"],["גערטנער","גארטנער","gertner","gartner","gaertner"],
+   ["טאננבוים","טאנענבוים","tannenbaum","tanenbaum"],["ערליך","ehrlich","erlich"],["בלוי","blau"],["שלעזינגער","schlesinger"],["לנדא","לאנדא","landau","landa"],["סופר","sofer","schreiber"],
+   ["פרידמאן","friedmann","friedman"],["האמערשלאג","hammerschlag"],["הורוויץ","הורוביץ","horowitz","horovitz","hurwitz"],["לאזאר","lazar"],
+   ["מרדכי","mordechai","mordecai","marton","martin"],["חיה","העלענע","chaya","helen","helene"],["אברהם","abraham","avraham","avrohom"],["יצחק","yitzchak","isaac","izsak","itzik"],
+   ["יעקב","yaakov","jacob","jakab","jakob","yankev"],["משה","moshe","moses","mozes"],["ישראל","yisroel","israel","izrael","izidor"],["שמואל","שמיל","shmuel","samuel","shmiel"],
+   ["שרה","sara","sarah"],["לאה","leah","lea"],["רחל","rachel","rahel"],["מרים","miriam","mirjam"],["יוסף","yosef","joseph","jozsef","josef"],["דוד","david","dovid"],
+   ["ליבא","liba","libby"],["עקיבא","akiva","akiba"],["פרומעט","פרימעט","frimet","frumet"],["חנה","chana","hanna","anna"],["אסתר","esther","eszter"],["אהרן","אהרון","aharon","aaron","aron"],
+   ["צבי","הירש","הערש","zvi","tzvi","hirsch","hersh"],["אריה","לייב","לייביש","aryeh","leib","leibush"],["דב","בער","dov","ber"],["זאב","וואלף","וועלוול","zev","wolf","velvel"],["שלמה","shlomo","solomon","salamon"]];
+  const SYNI=new Map(); SYN.forEach((g,gi)=>{ for(const w of g){ const a=nz(w); SYNI.set(a,gi); SYNI.set(lz(a),gi); } });
+  const SYNZ=SYN.map(g=>[...new Set(g.map(nz))]);
+  /* ---------- query words ---------- */
+  const STOP=new Set(["פון","דער","די","דעם","און","אין","of","the","von","de","der","die","and","in","from","at","to","a","an"].map(nz));
+  const TITL=new Set(["ר","רב","רבי","הרב","הרבנית","רבנית","מרת","מ","הגאון","הגהק","הגהצ","הרהק","הרהצ","הקדוש","האדמור","אדמור","רבינו","רבנו","מרן","זצל","זל","זיע","עה","הייד","נע","זצוקל","שליטא","ני","reb","rabbi","rebbe","rav","rabbiner","rebbetzin","mrs","mr","r","dr","rabbinic"].map(nz));
+  const RABT=new Set(["רב","רבי","הרב","הגאון","הגהק","הגהצ","הרהק","הרהצ","האדמור","אדמור","רבינו","רבנו","מרן","אבד","דיין","מגיד","rabbi","rebbe","rav","rabbiner","רבנים","רבייס","rebbes","rabbis"].map(nz));
+  const RABQ=/^(הגה["״]ק|הגה["״]צ|הרה["״]ק|הרה["״]צ|הגאון|הרב |רבי |רבנו|רבינו|האדמו["״]ר|מרן|הקדוש|רב )|אב["״]ד|אבד["״]ק|אדמו["״]ר|ראש ישיבה|דיין|מגיד|(^|\s)רב (אין|פון|ב|ד)|זי["״]ע|רבי פון|רעבי/;
+  const FEMT=new Set(["מרת","הרבנית","רבנית","rebbetzin","mrs"].map(nz)), FAMT=new Set(["משפחת","משפחה","family","familie","פאמיליע"].map(nz));
+  const RELW=[ /* [words before X (normalised, joined with space)], kind */
+    [["קינדער","פון"],"kids"],[["קינד","פון"],"kids"],[["זין","פון"],"kids"],[["טעכטער","פון"],"kids"],[["children","of"],"kids"],[["kids","of"],"kids"],[["son","of"],"kids"],[["sons","of"],"kids"],[["daughter","of"],"kids"],[["daughters","of"],"kids"],
+    [["זון","פון"],"kids"],[["טאכטער","פון"],"kids"],[["בן"],"kids"],[["בת"],"kids"],[["בר"],"kids"],[["בני"],"kids"],[["בנות"],"kids"],
+    [["עלטערן","פון"],"par"],[["טאטע","פון"],"par"],[["מאמע","פון"],"par"],[["parents","of"],"par"],[["father","of"],"par"],[["mother","of"],"par"],
+    [["ווייב","פון"],"sp"],[["מאן","פון"],"sp"],[["wife","of"],"sp"],[["husband","of"],"sp"],[["spouse","of"],"sp"],[["married","to"],"sp"],[["אשת"],"sp"],
+    [["געשוויסטער","פון"],"sib"],[["ברודער","פון"],"sib"],[["שוועסטער","פון"],"sib"],[["siblings","of"],"sib"],[["brother","of"],"sib"],[["sister","of"],"sib"],
+    [["אייניקלעך","פון"],"gkids"],[["grandchildren","of"],"gkids"],[["זיידע","פון"],"gpar"],[["באבע","פון"],"gpar"],[["grandparents","of"],"gpar"],[["grandfather","of"],"gpar"],[["grandmother","of"],"gpar"]
+  ].map(([w,k])=>[w.map(nz),k]);
+  const RELN={kids:"די קינדער פון",par:"די עלטערן פון",sp:"דער מאן אדער די ווייב פון",sib:"די געשוויסטער פון",gkids:"די אייניקלעך פון",gpar:"די זיידעס און באבעס פון"};
+  /* Hebrew numbers, years, months */
+  const GV={"א":1,"ב":2,"ג":3,"ד":4,"ה":5,"ו":6,"ז":7,"ח":8,"ט":9,"י":10,"כ":20,"ל":30,"מ":40,"נ":50,"ס":60,"ע":70,"פ":80,"צ":90,"ק":100,"ר":200,"ש":300,"ת":400};
+  function gem(w){ let v=0, last=1e9; for(const c of w){ const g=GV[c]; if(!g) return -1; if(g>last&&!(last===9&&(g===6||g===7))) return -1; v+=g; last=g; } return v; }
+  function hebYear(raw){ let w=String(raw).replace(/^ה['׳]?/,""); if(!/["״]/.test(w)&&!/^ת/.test(nz(w))) return 0; const n=nz(w); if(!/^ת/.test(n)||n.length<2||n.length>5) return 0; const v=gem(n); return v>=400&&v<1000?5000+v:0; }
+  const MONTHS=[["ניסן",[1]],["אייר",[2]],["איר",[2]],["סיון",[3]],["סיוון",[3]],["תמוז",[4]],["אב",[5]],["מנחםאב",[5]],["אלול",[6]],["תשרי",[7]],["חשון",[8]],["חשוון",[8]],["מרחשון",[8]],["מרחשוון",[8]],["כסלו",[9]],["כסליו",[9]],["טבת",[10]],["שבט",[11]],["אדר",[12,13]],["אדרא",[12]],["אדרב",[13]],["אדרשני",[13]]].map(([a,b])=>[nz(a),b]);
+  const MONM=new Map(MONTHS);
+  /* ---------- the index ---------- */
+  const LIV=/שליט["״]א|(^|[^א-ת])נ["״]י([^א-ת]|$)|שיחי|שתחי|לאוי["״]ט/;
+  const isLiv=id=>LIV.test(String(P[id].n||"")+" "+String(P[id].t||""));
+  const HF=["n","a","t","pl","d"], BF=["x","s","c"];
+  const FW={n:100,a:85,t:45,pl:45,d:40,x:22,s:16,c:14};
+  const FWHY={n:"נאָמען",a:"אנדער נאָמען",t:"באשרייבונג",pl:"ארט",d:"דאטעס",x:"נאָטיץ",s:"מקור",c:"בילד",m:"מיידן-נאָמען",y:"יאָר",z:"יאָרצייט",r:"קרובים",f:"ענליכער נאָמען",k:"ענליכער קלאַנג",o:"ענליכער שרייבונג"};
+  const YRX=/(^|[^0-9])(1[0-9]{3}|20[0-3][0-9])(?![0-9])/g, HYRX=/(^|[^א-ת])(?:ה['׳])?(ת[א-ת]{0,2}["״][א-ת])(?![א-ת])/g;
+  function years(t,set,hs){ if(!t) return; let m; YRX.lastIndex=0; while((m=YRX.exec(t))) set.add(+m[2]); HYRX.lastIndex=0; while((m=HYRX.exec(t))){ const v=gem(nz(m[2])); if(v>=400) hs.add(5000+v); } }
+  const IX=[]; const BYID=new Map(); let VOC=null, VOCL=null, VOCK=null, VOCN=[], BODY=false, SIDX=null, YZ=null;
+  function splitName(n){ n=String(n||""); const alt=[]; let main=n.replace(/\(([^)]*)\)/g,(_,x)=>{ alt.push(x); return " "; });
+    const lb=main.match(/\s(לבית|געבוירענע|née|nee|geb\.?)\s.*$/); let maid=""; if(lb){ maid=lb[0]; main=main.slice(0,lb.index); }
+    return [main.replace(/\s+/g," ").trim(), alt.join(" · "), maid.trim()]; }
+  function mk(id){ const p=P[id], liv=isLiv(id); const [mn,al,md]=splitName(p.n);
+    const F={n:mn, a:[al,md].filter(Boolean).join(" · "), t:liv?"":(p.t||""), pl:liv?"":(p.pl||""), d:liv?"":(p.d||"")};
+    const r={id, liv, F, maid:md, hz:"", hl:"", ho:[], hlo:[], bz:"", bl:"", bo:[], blo:[], B:null, Y:new Set(), YB:new Set(), H:new Set(), HB:new Set(), nw:[], nmz:nz(mn.replace(/^(ר['׳]?|רבי|הרב|הרבנית|מרת|הגה"ק|הרה"ק)\s+/,"").replace(/\s+(הי["״]ד|ז["״]ל|זצ["״]ל|זי["״]ע|ע["״]ה|נ["״]ע)\s*$/,""))};
+    let a=[], b=[]; for(const f of HF){ const z=nz(F[f]), l=lz(nzK(F[f])); r.ho.push(a.join("|").length+(a.length?1:0)); r.hlo.push(b.join("|").length+(b.length?1:0)); a.push(z); b.push(l); }
+    r.hz=a.join("|"); r.hl=b.join("|");
+    r.nw=mn.split(/[\s\-–־,]+/).map(nz).filter(Boolean);
+    if(!liv){ years(F.d,r.Y,r.H); years(F.t,r.Y,r.H); years(F.pl,r.Y,r.H); }
+    r.maidz=md?nz(md):""; if(p.md&&p.md.length) r.pic=1; return r; }
+  function addBody(r,row){ if(r.liv||!row) return; const B={x:row[0]||"", s:row[1]||"", c:row[2]||""}; r.B=B;
+    let a=[], b=[]; for(const f of BF){ const z=nzK(B[f]), l=lz(z); r.bo.push(a.join("|").length+(a.length?1:0)); r.blo.push(b.join("|").length+(b.length?1:0)); a.push(z); b.push(l); }
+    r.bz=a.join("|"); r.bl=b.join("|"); years(B.x,r.YB,r.HB); years(B.s,r.YB,r.HB); }
+  function fieldAt(offs,flds,pos){ let k=0; for(let i=0;i<offs.length;i++) if(offs[i]<=pos) k=i; return flds[k]; }
+  /* vocabulary: every word in names, titles and places (+ Latin words of the notes), for typos and sound matches */
+  function addVoc(w,orig,id,f){ if(w.length<2||/^[0-9]+$/.test(w)) return; let v=VOC.get(w); if(!v){ v={w,o:orig,l:lz(w),k:pk(w),ids:new Map(),n:0,pl:f==="pl"}; VOC.set(w,v); } if(!v.ids.has(id)||FW[f]>FW[v.ids.get(id)]) v.ids.set(id,f); v.n++; if(f==="pl") v.pl=true; }
+  function buildVoc(){ VOC=new Map();
+    for(const r of IX){ for(const f of ["n","a","t","pl"]){ const t=r.F[f]; if(!t) continue; for(const o of t.split(/[\s,·:;()\[\]\/←–\-־"„“”']+/)){ const w=nz(o); if(w) addVoc(w,o.replace(/^[\s"„“”'(]+|[\s"„“”'),.:;]+$/g,""),r.id,f); } }
+      if(r.B&&!r.liv){ for(const f of BF){ const t=r.B[f]; if(!t) continue; const L=t.match(/[A-Za-zÀ-žÁ-ű][A-Za-zÀ-ž'’\-]{2,}/g); if(L) for(const o of L){ if(o[0]!==o[0].toUpperCase()) continue; const w=nz(o); if(w.length>=3) addVoc(w,o,r.id,f); } } } }
+    for(const r of IX){ if(!r.F.pl) continue; for(const seg of r.F.pl.split(/\s*(?:←|\/|,|·|–|\(|\))\s*/)){ const s=seg.replace(/^קבורה:\s*/,"").replace(/[≈?]/g,"").trim(); const w=nz(s); if(w.length>=3&&s.length<30) addVoc(w,s,r.id,"pl"); } }
+    VOCL=[...VOC.values()]; VOCK=new Map(); VOCN=[]; for(const v of VOCL){ let a=VOCK.get(v.k); if(!a) VOCK.set(v.k,a=[]); a.push(v); const n=v.l.length; (VOCN[n]=VOCN[n]||[]).push(v); } }
+  function buildCore(){ IX.length=0; BYID.clear(); for(const id in P){ const r=mk(id); IX.push(r); BYID.set(id,r); } buildVoc(); }
+  /* relations */
+  let KIDS=null, SPO=null;
+  function rel(){ if(KIDS) return; KIDS={}; SPO={};
+    for(const c in UP){ const u=UP[c]||[]; for(const x of u) if(x){ (KIDS[x]=KIDS[x]||new Set()).add(c); } if(u[0]&&u[1]){ (SPO[u[0]]=SPO[u[0]]||new Set()).add(u[1]); (SPO[u[1]]=SPO[u[1]]||new Set()).add(u[0]); } }
+    if(typeof MAR!=="undefined") for(const g of MAR){ if(g.f&&g.m){ (SPO[g.f]=SPO[g.f]||new Set()).add(g.m); (SPO[g.m]=SPO[g.m]||new Set()).add(g.f); } }
+    if(typeof FAM!=="undefined"&&FAM&&FAM.sp){ (SPO[ROOT]=SPO[ROOT]||new Set()).add(FAM.sp); (SPO[FAM.sp]=SPO[FAM.sp]||new Set()).add(ROOT); } }
+  function relOf(id,k){ rel(); const out=new Set(), add=x=>{ if(x&&P[x]&&x!==id) out.add(x); };
+    if(k==="kids"){ for(const c of (KIDS[id]||[])){ add(c); for(const x of (P[c].sibs||[])) add(x); } for(const k2 in P){ const so=P[k2].sibof; if(so&&KIDS[id]&&KIDS[id].has(so)) add(k2); } }
+    else if(k==="par"){ for(const u of (UP[id]||[])) add(u); if(P[id].sibof) for(const u of (UP[P[id].sibof]||[])) add(u); }
+    else if(k==="sp"){ for(const x of (SPO[id]||[])) add(x); }
+    else if(k==="sib"){ const ps=(UP[id]||[]).filter(Boolean); for(const pp of ps) for(const c of (KIDS[pp]||[])) add(c); for(const x of (P[id].sibs||[])) add(x); if(P[id].sibof){ add(P[id].sibof); for(const x of (P[P[id].sibof].sibs||[])) add(x); }
+      for(const k2 in P) if(P[k2].sibof===id) add(k2); }
+    else if(k==="gkids"){ for(const c of (KIDS[id]||[])) for(const g of (KIDS[c]||[])) add(g); }
+    else if(k==="gpar"){ for(const u of (UP[id]||[])) if(u) for(const g of (UP[u]||[])) add(g); }
+    return [...out]; }
+  /* ---------- searching ---------- */
+  function tokens(q){ const raw=q.replace(/[,;!?]/g," ").split(/\s+/).filter(Boolean); return raw.map(o=>({o,z:nz(o)})).filter(t=>t.z); }
+  function alts(t){ const z=t.z, L=lz(z), A=[{s:z,ts:1,w:"all",why:null}]; const seen=new Set([z]); t.L=L;
+    if(t.dt){ for(const s of [t.dd+" "+t.dm, t.dd+" ב"+t.dm, t.dd+" ל"+t.dm, t.dd+" לחודש "+t.dm, t.dd+"ב"+t.dm, t.dd+"ל"+t.dm, t.dd+"לחודש"+t.dm]) A.push({s,ts:1,w:"all",why:null}); for(const a of A) a.l=""; t.A=A; return A; }
+    const gi=SYNI.has(z)?SYNI.get(z):(SYNI.has(L)?SYNI.get(L):-1); if(gi>=0) for(const w of SYNZ[gi]) if(!seen.has(w)){ seen.add(w); A.push({s:w,ts:0.95,w:"all",why:null}); }
+    if(/^[\u05d0-\u05ea]/.test(z)&&z.length>=5){ if(/^[מבלוהד]/.test(z)) A.push({s:z.slice(1),ts:0.8,w:"all",why:null}); if(/ער$/.test(z)) A.push({s:z.slice(0,-2),ts:0.85,w:"all",why:null}); if(/^[מבלוהד]/.test(z)&&/ער$/.test(z)) A.push({s:z.slice(1,-2),ts:0.75,w:"all",why:null}); }
+    if(/^[a-z]/.test(z)&&z.length>=5&&/(s|er|es)$/.test(z)) A.push({s:z.replace(/(s|er|es)$/,""),ts:0.8,w:"all",why:null});
+    for(const a of A) a.l=lz(a.s); t.A=A; return A; }
+  function vocAlts(t){ /* typos and sound: words of the vocabulary that are close */ const z=t.z, L=t.L, K=pk(z), out=[]; if(z.length<3||!VOCL) return out;
+    const mx=z.length>=8?2:z.length>=5?1:0, heb=/^[\u05d0-\u05ea]/.test(z), ok=heb||/[aeiouy]/.test(z), seen=new Set([z]);
+    if(ok) for(const v of (VOCK.get(K)||[])){ if(seen.has(v.w)) continue; const cross=heb!==/^[\u05d0-\u05ea]/.test(v.w);
+      if(Math.abs(v.w.length-z.length)<=3&&(K.length>=3||(cross&&K.length===2&&z.length>=4&&v.w.length<=z.length+1))){ out.push([v,cross?0.72:0.62,"k"]); seen.add(v.w); } }
+    if(mx) for(let n=Math.max(0,L.length-mx);n<=L.length+mx;n++) for(const v of (VOCN[n]||[])){ if(seen.has(v.w)) continue; if(ed(v.l,L,mx)<=mx){ out.push([v,0.6,"f"]); seen.add(v.w); } }
+    if(ok&&K.length>=5) for(const [k2,arr] of VOCK){ if(k2[0]!==K[0]||Math.abs(k2.length-K.length)>1||k2===K) continue; if(ed(k2,K,1)>1) continue; for(const v of arr){ if(seen.has(v.w)||Math.abs(v.w.length-z.length)>3) continue; out.push([v,0.5,"k"]); seen.add(v.w); } }
+    out.sort((a,b)=>b[1]-a[1]||b[0].n-a[0].n); return out.slice(0,24); }
+  /* a match in spaced text: [position, starts a word]; a match inside a word only counts for 5+ letters */
+  function wsFind(h,s){ let i=h.indexOf(s), mid=-1, n=0; while(i>=0&&n<40){ const c=i?h[i-1]:" "; if(c===" "||c==="|") return [i,1]; if(mid<0) mid=i; i=h.indexOf(s,i+1); n++; } return (mid>=0&&s.length>=5)?[mid,0]:null; }
+  let LB=false;
+  function scoreTok(r,t,A,VA){ let best=null; const put=(sc,f,why,s,hay)=>{ if(!best||sc>best.sc) best={sc,f,why,s,hay}; };
+    for(const a of A){ const s=a.s; if(!s) continue;
+      let i=r.hz.indexOf(s); if(i>=0){ const f=fieldAt(r.ho,HF,i); let sc=FW[f]; if(f==="n"){ if(r.nw.includes(s)) sc=100; else if(r.nw.some(w=>w.startsWith(s))) sc=85; else sc=70; }
+        let why=f; if(f==="a"&&r.maidz&&r.maidz.includes(s)){ why="m"; sc=95; } put(sc*a.ts,f,why,s,"h"); }
+      if(r.bz&&(!best||best.sc<FW.x)){ const w=wsFind(r.bz,s); if(w){ const f=fieldAt(r.bo,BF,w[0]); put(FW[f]*a.ts*(w[1]?1:0.6),f,f,s,"b"); } }
+      if(!t.yr&&(!best||best.sc<50)){ const l=a.l; if(l&&l.length>=4){ let w=wsFind(r.hl,l); if(w&&w[1]){ const f=fieldAt(r.hlo,HF,w[0]); put(FW[f]*0.8*a.ts,f,"o",l,"hl"); } else if(LB&&a.ts===1&&r.bl&&(w=wsFind(r.bl,l))&&w[1]){ const f=fieldAt(r.blo,BF,w[0]); put(FW[f]*0.75*a.ts,f,"o",l,"bl"); } } } }
+    if(VA&&(!best||best.sc<60)) for(const [v,ts,why] of VA){ const f=v.ids.get(r.id); if(f){ put(FW[f]*ts,f,why,v.w,f==="x"||f==="s"||f==="c"?"b":"h"); break; } }
+    if(t.yr){ const [y0,y1]=t.yr.g, [h0,h1]=t.yr.h; const inS=(S,a,b)=>{ for(const y of S) if(y>=a&&y<=b) return true; return false; };
+      if(inS(r.Y,y0,y1)||inS(r.H,h0,h1)) put(30,"d","y",null,null); else if(inS(r.YB,y0,y1)||inS(r.HB,h0,h1)) put(15,"x","y",null,null); }
+    return best; }
+  function yearTok(t){ let m;
+    const G=(a,b)=>({g:[a,b],h:[a+3760,b+3761]});
+    if((m=t.o.match(/^(\d{3})0(?:s|'s|er|ער|ער יאָרן)$/i))) return G(+m[1]*10,+m[1]*10+9);
+    if((m=t.o.match(/^(\d{3})[x?]$/i))) return G(+m[1]*10,+m[1]*10+9);
+    if((m=t.o.match(/^(\d{4})\s*[-–]\s*(\d{2,4})$/))){ let b=+m[2]; if(m[2].length===2) b=Math.floor(+m[1]/100)*100+b; return G(Math.min(+m[1],b),Math.max(+m[1],b)); }
+    if((m=t.o.match(/^(1[0-9]{3}|20[0-3][0-9])$/))) return G(+m[1],+m[1]);
+    const hy=hebYear(t.o); if(hy) return {g:[hy-3761,hy-3760],h:[hy,hy]}; return null; }
+  function dayTok(o){ const z=nz(o); if(/^[0-9]{1,2}$/.test(z)){ const v=+z; return v>=1&&v<=30?v:0; } if(!/^[\u05d0-\u05ea]{1,2}$/.test(z)) return 0; if(z.length===2&&!/["״'׳]/.test(o)&&!(z==="טו"||z==="טז")) return 0; const v=gem(z); return v>=1&&v<=30?v:0; }
+  function search(q){ const t0=performance.now(); let T=tokens(q); const flags={rab:false,fem:false,fam:false};
+    const out={people:[],places:[],srcs:[],fams:[],rel:[],q,ms:0,dym:null,partial:false};
+    if(!T.length) return out;
+    /* relations: "קינדער פון X", "בת X", "son of X"; "A בן B" */
+    const Z=T.map(t=>t.z); let relK=null, relX=null, relA=null;
+    for(const [ws,k] of RELW){ for(let i=0;i+ws.length<=Z.length;i++){ let ok=true; for(let j=0;j<ws.length;j++) if(Z[i+j]!==ws[j]){ ok=false; break; } if(!ok) continue;
+        const after=T.slice(i+ws.length), before=T.slice(0,i); if(!after.length) continue;
+        if(i===0){ relK=k; relX=after; } else if(k==="kids"&&ws.length<=2){ relK="childOf"; relA=before; relX=after; }
+        if(relK){ for(let j=0;j<ws.length;j++) T[i+j].rel=1; } break; } if(relK) break; }
+    /* yahrzeit date "ט"ו כסלו" */
+    let yzd=null; for(let i=0;i+1<T.length;i++){ const d=dayTok(T[i].o); let mz=T[i+1].z.replace(/^(ב|ל|ד)(?=[\u05d0-\u05ea]{3})/,""); if(mz==="חודש"&&T[i+2]) mz=T[i+2].z; if(T[i+2]&&/^(א|ב|שני|ראשון)$/.test(T[i+2].z)&&mz==="אדר") mz=mz+({"שני":"ב","ראשון":"א"}[T[i+2].z]||T[i+2].z);
+      const ms=MONM.get(mz)||MONM.get(T[i+1].z); if(d&&ms){ yzd={d,ms,i}; T[i].rel=1; T[i+1].rel=1; T.push({o:T[i].o+" "+T[i+1].o,z:T[i].z+mz,dt:1,dd:T[i].z,dm:mz}); break; } }
+    /* drop titles / stop words, remember what they ask for */
+    const keep=[]; for(const t of T){ if(t.rel) continue; if(RABT.has(t.z)) flags.rab=true; if(FEMT.has(t.z)) flags.fem=true; if(FAMT.has(t.z)){ flags.fam=true; continue; } if(TITL.has(t.z)||STOP.has(t.z)) continue; if(t.z.length<2&&!/^[0-9]$/.test(t.z)) continue; keep.push(t); }
+    const sTok=keep.length?keep:T.filter(t=>t.z.length>=2);
+    for(const t of sTok){ t.yr=yearTok(t); alts(t); t.VA=(t.yr||t.dt||t.z.length<3)?null:vocAlts(t); }
+    const scoreAll=(TT,need)=>{ const R=[]; for(const r of IX){ let tot=0, n=0, hits=[]; for(const t of TT){ const b=scoreTok(r,t,t.A,t.VA); if(b){ tot+=b.sc; n++; hits.push(b); } }
+        if(n<need||!n) continue; R.push({r,sc:tot,n,hits}); } return R; };
+    let R=[];
+    if(relK&&relX){ const XT=relX.filter(t=>!TITL.has(t.z)&&!STOP.has(t.z)); for(const t of XT){ t.yr=null; alts(t); t.VA=vocAlts(t); }
+      const nameOnly=L=>{ const o=L.filter(x=>x.hits.every(h=>h.f==="n"||h.f==="a")); return o.length?o:L; };
+      let XR=nameOnly(scoreAll(XT,XT.length)); XR.sort((a,b)=>b.sc-a.sc); const top=XR.length?XR[0].sc:0; XR=XR.filter(x=>x.sc>=top*0.85).slice(0,4);
+      if(relK==="childOf"&&relA){ const AT=relA.filter(t=>!TITL.has(t.z)&&!STOP.has(t.z)); for(const t of AT){ t.yr=null; alts(t); t.VA=vocAlts(t); }
+        let AR=nameOnly(scoreAll(AT,AT.length)); const xs=new Set(scoreAll(XT,XT.length).filter(x=>x.hits.every(h=>h.f==="n"||h.f==="a")).map(x=>x.r.id));
+        for(const a of AR){ const u=(UP[a.r.id]||[]).concat(P[a.r.id].sibof?(UP[P[a.r.id].sibof]||[]):[]); const pp=u.find(x=>x&&xs.has(x)); if(pp) out.rel.push({id:a.r.id,sc:a.sc+200,why:"בן/בת פון "+P[pp].n}); }
+        out.rel.sort((a,b)=>b.sc-a.sc); }
+      else for(const x of XR){ const ids=relOf(x.r.id,relK); out.rel.push({hd:RELN[relK]+" "+P[x.r.id].n, of:x.r.id, ids}); } }
+    if(yzd&&YZ){ const ids=[]; for(const e of YZ){ if(!P[e.i]||e.d!==yzd.d||!yzd.ms.includes(e.m)) continue; if(BYID.get(e.i)&&BYID.get(e.i).liv) continue; ids.push(e.i); }
+      out.rel.unshift({hd:"יאָרצייט "+T[yzd.i].o+" "+T[yzd.i+1].o, ids:[...new Set(ids)], yz:1}); }
+    LB=false; R=scoreAll(sTok,sTok.length); if(R.length<10){ LB=true; R=scoreAll(sTok,sTok.length); }
+    if(!R.length&&sTok.length>1){ R=scoreAll(sTok,Math.max(1,sTok.length-1)); out.partial=R.length>0; } LB=false;
+    const qn=nz(keep.map(t=>t.o).join(" "));
+    for(const x of R){ const r=x.r; if(qn&&r.nmz===qn) x.sc+=300; else if(qn&&r.nmz.startsWith(qn)) x.sc+=60;
+      if(flags.rab){ if(x.hits.every(h=>!/^[kfo]$/.test(h.why))&&RABQ.test(String(P[r.id].n||"")+" · "+r.F.t)&&!/^(מרת|הרבנית|רבנית)/.test(String(P[r.id].n||""))) x.sc+=80; else x.sc-=20; }
+      if(flags.fem&&/^(מרת|הרבנית|רבנית)|לבית/.test(String(P[r.id].n||""))) x.sc+=30;
+      if(typeof N!=="undefined"&&N[r.id]) x.sc+=4; if(r.pic) x.sc+=2; if(P[r.id].m==="ok") x.sc+=1; }
+    R.sort((a,b)=>b.sc-a.sc||String(P[a.r.id].n).length-String(P[b.r.id].n).length);
+    for(const x of R){ const f=x.hits.reduce((a,b)=>b.sc>a.sc?b:a,x.hits[0]); x.best=f; if(f.f==="s"||f.f==="c") out.srcs.push(x); else out.people.push(x); }
+    /* places */
+    if(VOCL&&sTok.length){ const PL=[]; for(const v of VOCL){ if(!v.pl) continue; let ok=true, sc=0; for(const t of sTok){ const hit=t.A.some(a=>v.w.includes(a.s)||(a.l&&a.l.length>=4&&v.l.includes(a.l))); if(hit){ sc+=v.w===t.z?3:2; } else { ok=false; break; } } if(ok) PL.push([v,sc]); }
+      PL.sort((a,b)=>b[1]-a[1]||b[0].n-a[0].n); const seenG=new Set();
+      for(const [v] of PL){ const gi=SYNI.has(v.w)?SYNI.get(v.w):-1; const key=gi>=0?"g"+gi:v.w; if(seenG.has(key)) continue; seenG.add(key); out.places.push(v); if(out.places.length>=4) break; } }
+    /* family pills */
+    if(typeof PILLS!=="undefined"&&sTok.length===1){ const t=sTok[0]; for(const g of PILLS) for(const it of g.items){ const lab=String(it.label||""); const fz=nz(lab.replace(/^משפחת\s*/,"")); if(!fz) continue;
+        if(t.A.some(a=>fz.includes(a.s)||a.s.includes(fz))||(t.z.length>=4&&pk(t.z)===pk(fz))){ let id=null; try{ id=pillId(g,it); }catch(e){} if(id) out.fams.push({lab,rel:it.rel,id}); } } }
+    if(!out.people.length&&!out.srcs.length&&!out.rel.length&&!out.places.length) out.dym=didYouMean(sTok);
+    out.ms=performance.now()-t0; out.tok=sTok; return out; }
+  function didYouMean(TT){ if(!VOCL) return null; const parts=[]; let changed=false;
+    for(const t of TT){ if(t.yr){ parts.push(t.o); continue; } let best=null, bd=9; const L=lz(t.z), K=pk(t.z);
+      const ok=/^[\u05d0-\u05ea]/.test(t.z)||/[aeiouy]/.test(t.z);
+      for(const v of VOCL){ if(Math.abs(v.l.length-L.length)>3) continue; const d=Math.min(ed(v.l,L,3), ok&&K.length>=3&&v.k===K?1:9); if(d<bd||(d===bd&&best&&v.n>best.n)){ bd=d; best=v; } }
+      if(best&&bd<=Math.max(1,Math.floor(t.z.length/3))){ parts.push(best.o||best.w); if(best.w!==t.z) changed=true; } else parts.push(t.o); }
+    return changed?parts.join(" "):null; }
+  /* ---------- showing ---------- */
+  function mark(text,toks){ text=String(text||""); if(!text) return ""; const [zs,zm]=nzMap(text); const [ls,lm]=lzMap(zs,zm); const R=[];
+    for(const t of (toks||[])){ for(const a of (t.A||[])){ const s=a.s; if(!s||s.length<2) continue; let i=zs.indexOf(s); while(i>=0&&R.length<12){ R.push([zm[i],zm[i+s.length-1]]); i=zs.indexOf(s,i+s.length); }
+        if(R.length) continue; const l=lz(s); if(l.length>=4){ i=ls.indexOf(l); if(i>=0) R.push([lm[i],lm[i+l.length-1]]); } } }
+    return R; }
+  function hl(text,R){ text=String(text||""); if(!R||!R.length) return esc(text); R=R.slice().sort((a,b)=>a[0]-b[0]); let o="", p=0;
+    for(const [a,b0] of R){ let b=b0; if(a<p) continue; while(b+1<text.length&&/[\u0591-\u05c7]/.test(text[b+1])) b++; o+=esc(text.slice(p,a))+"<mark>"+esc(text.slice(a,b+1))+"</mark>"; p=b+1; } return o+esc(text.slice(p)); }
+  function window_(text,toks,len){ text=String(text||"").replace(/\s*\n\s*/g," · ").replace(/•\s*/g,""); const R=mark(text,toks);
+    if(!R.length) return esc(text.length>len?text.slice(0,len)+"…":text);
+    const c=R.slice().sort((a,b)=>a[0]-b[0])[0][0]; let a=Math.max(0,c-Math.floor(len*0.35)), b=Math.min(text.length,a+len);
+    if(a>0){ const sp=text.lastIndexOf(" ",a+8); if(sp>a-12&&sp>=0) a=sp+1; } if(b<text.length){ const sp=text.indexOf(" ",b-8); if(sp>0&&sp<b+12) b=sp; }
+    const seg=text.slice(a,b), R2=R.filter(x=>x[0]>=a&&x[1]<b).map(x=>[x[0]-a,x[1]-a]); return (a>0?"…":"")+hl(seg,R2)+(b<text.length?"…":""); }
+  function dates(id){ const r=BYID.get(id); if(!r||r.liv) return ""; const d=String(P[id].d||""); if(!d) return "";
+    const pick=s=>{ const m=s.match(/≈?\s*(1[0-9]{3}|20[0-3][0-9])/)||s.match(/(?:^|[^א-ת])(ת[א-ת]{0,2}["״][א-ת])(?![א-ת])/); return m?(m[0].trim().replace(/^[^≈0-9ת]+/,"")):""; };
+    const sides=d.split(/\s[–-]\s/); let o=""; if(sides.length>=2){ const a=pick(sides[0]), b=pick(sides.slice(1).join(" ")); if(a||b) o=(a||"?")+" – "+(b||"?"); } else { const a=pick(d); if(a) o=(/נפטר|אומגעקומען|נהרג|פטירה|נלב/.test(d)?"† ":"")+a; }
+    if(!o) o=d.length>34?d.slice(0,34)+"…":d; return o; }
+  const curTok={v:[]};
+  function row(id,why,snipHtml,cls,hits){ const p=P[id], r=BYID.get(id); if(!p) return ""; const ex=(hits||[]).filter(h=>h&&h.s).map(h=>({A:[{s:h.s}]})); const R=mark(p.n,curTok.v.concat(ex)); const dt=dates(id);
+    return '<button class="srr'+(cls?" "+cls:"")+'" data-id="'+esc(id)+'"><i style="background:'+bc(id)+'"></i><span class="srn"><b>'+hl(p.n,R)+'</b>'+(dt?'<small class="srdt">'+esc(dt)+'</small>':"")+
+      (why?'<small class="srwhy">געפונען אין: '+why+'</small>':"")+(snipHtml&&!(r&&r.liv)?'<span class="srsn">'+snipHtml+'</span>':"")+'</span></button>'; }
+  function whyOf(x){ const b=x.best; let w=FWHY[b.why]||FWHY[b.f]||""; if(b.why==="f"||b.why==="k"||b.why==="o"){ const v=VOC&&VOC.get(b.s); w=FWHY[b.why]+(v&&v.o?' ("'+esc(v.o)+'")':"")+" · "+FWHY[b.f]; } if(b.why==="y") w=FWHY.y+" ("+FWHY[b.f]+")"; return w; }
+  function snipOf(x){ const r=x.r, b=x.best; if(r.liv) return ""; const f=b.f; if(f==="n") return "";
+    let txt=(f==="x"||f==="s"||f==="c")?(r.B?r.B[f]:""):r.F[f]; if(!txt) return "";
+    let toks=curTok.v; if(b.why==="f"||b.why==="k") toks=[{A:[{s:b.s}]}];
+    if(b.why==="y"){ const yr=x.hits.find(h=>h.why==="y"); const tk=curTok.v.find(t=>t.yr); if(tk){ const ys=[]; for(let y=tk.yr.g[0];y<=tk.yr.g[1]&&ys.length<12;y++) ys.push({s:String(y)}); toks=toks.concat([{A:ys}]); } }
+    return window_(txt,toks,f==="x"||f==="s"||f==="c"?120:90); }
+  let LIMIT=40, lastQ="", lastRes=null;
+  function render(res){ const L=$("srl"); curTok.v=res.tok||[]; let h="";
+    if(res.dym) h+='<p class="srm">גארנישט געפונען. <a href="#" class="srdym" data-q="'+esc(res.dym)+'">מיינסטו: <b>'+esc(res.dym)+'</b>?</a></p>';
+    const sug=suggest(res.q); if(sug.length) h+='<p class="srsug">פארשלאגן: '+sug.map(s=>'<a href="#" data-q="'+esc(s[0])+'">'+esc(s[1])+'</a>').join(" · ")+'</p>';
+    if(res.fams.length){ h+='<h4>משפחות</h4>'; for(const f of res.fams) h+='<button class="srr srf" data-pill="'+esc(f.id)+'"><i style="background:'+bc(f.id)+'"></i><span class="srn"><b>'+esc(f.lab)+'</b><small class="srdt">'+esc(f.rel||"")+'</small><small class="srwhy">גיי צו דער משפחה אויפן בוים</small></span></button>'; }
+    for(const g of res.rel){ if(g.hd){ h+='<h4>'+esc(g.hd)+' <small>('+g.ids.length+')</small></h4>'; if(!g.ids.length) h+='<p class="srm">'+(g.yz?"אויפן בוים איז נישטא קיין יאָרצייט אויף דעם טאג":"נישטא אויפן בוים")+'</p>'; for(const id of g.ids.slice(0,60)) h+=row(id,g.yz?"יאָרצייט":"קרובים",""); } }
+    const cr=res.rel.filter(g=>!g.hd); if(cr.length){ h+='<h4>קרובים</h4>'; for(const x of cr.slice(0,40)) h+=row(x.id,esc(x.why),""); }
+    if(res.people.length){ h+='<h4>אנשים <small>('+res.people.length+(res.partial?", נישט אלע ווערטער":"")+')</small></h4>'; for(const x of res.people.slice(0,LIMIT)) h+=row(x.r.id,whyOf(x),snipOf(x),"",x.hits);
+      if(res.people.length>LIMIT) h+='<button class="srmore" type="button">ווייז נאך '+Math.min(40,res.people.length-LIMIT)+' פון '+(res.people.length-LIMIT)+'</button>'; }
+    if(res.places.length){ h+='<h4>ערטער</h4>'; for(const v of res.places) h+='<button class="srr srp" data-q="'+esc(v.o||v.w)+'"><i class="srpin">📍</i><span class="srn"><b>'+hl(v.o||v.w,mark(v.o||v.w,curTok.v))+'</b><small class="srwhy">'+v.ids.size+' קארטלעך – טאפט צו זען אלע</small></span></button>'; }
+    if(res.srcs.length){ h+='<h4>קוואַלן <small>('+res.srcs.length+')</small></h4>'; for(const x of res.srcs.slice(0,30)) h+=row(x.r.id,whyOf(x),snipOf(x),"",x.hits); }
+    if(!h) h='<p class="srm">גארנישט געפונען'+(BODY?"":" (די נאָטיצן לאָדן זיך נאך)")+'</p>';
+    L.innerHTML=h; }
+  function suggest(q){ if(!VOCL) return []; const T=q.trim().split(/\s+/); const last=T[T.length-1]||""; const z=nz(last); if(z.length<2||/^[0-9]/.test(z)) return []; const L=lz(z);
+    const c=[]; for(const v of VOCL){ if(v.w===z||v.w.length<=z.length) continue; if(v.w.startsWith(z)||v.l.startsWith(L)) c.push(v); }
+    c.sort((a,b)=>b.ids.size-a.ids.size); const pre=T.slice(0,-1).join(" "); const seen=new Set(); const out=[];
+    for(const v of c){ const o=v.o||v.w; if(seen.has(nz(o))) continue; seen.add(nz(o)); out.push([(pre?pre+" ":"")+o,o]); if(out.length>=4) break; } return out; }
+  /* recent searches */
+  const RK="yichus_search_recent_v1";
+  const recent=()=>{ try{ return JSON.parse(localStorage.getItem(RK)||"[]")||[]; }catch(e){ return []; } };
+  const remember=q=>{ q=q.trim(); if(q.length<2) return; let a=recent().filter(x=>x!==q); a.unshift(q); a=a.slice(0,8); try{ localStorage.setItem(RK,JSON.stringify(a)); }catch(e){} };
+  function srHome(){ const a=recent(); let h="";
+    if(a.length){ h+='<h4>לעצטע זוכונגען <a href="#" class="srclr">מעק אויס</a></h4>'; for(const q of a) h+='<button class="srr srrec" data-q="'+esc(q)+'"><i class="srpin">🕘</i><span class="srn">'+esc(q)+'</span></button>'; }
+    h+='<h4>וואס מען קען זוכן</h4>';
+    const EX=[["לייטנער","א נאָמען, אויף אידיש אדער לאטייניש (Leitner, Akiva Schlesinger)"],["Oradea","אן ארט, אין יעדע שפראך (גרויסווארדיין, Nagyvárad)"],['תרע"ו',"א יאָר, אידיש אדער לועזיש, אדער א צייט (1916, 1880s)"],['ט"ו כסלו',"א יאָרצייט"],["קינדער פון מארטאן","קרובים: קינדער פון, בת, ווייב פון, עלטערן פון"],["רבי פון סאטמאר","רבנים פון א שטאָט"]];
+    for(const [q,d] of EX) h+='<button class="srr srex" data-q="'+esc(q)+'"><i class="srpin">🔎</i><span class="srn"><b>'+esc(q)+'</b><small class="srwhy">'+esc(d)+'</small></span></button>';
+    $("srl").innerHTML=h; }
+  /* ---------- loading ---------- */
+  let loading=null;
+  function status(){ const st=$("srs"); if(!st) return; st.textContent=IX.length.toLocaleString("en-US")+" קארטלעך"+(BODY?" · אלע נאָטיצן, קוואַלן און בילדער":" · מען לאָדט די נאָטיצן און קוואַלן…"); }
+  function load(){ if(loading) return loading; buildCore(); status();
+    const gj=(u,f)=>fetch(u+f+"?v="+(window.YV||"")).then(r=>{ if(!r.ok) throw 0; return r.json(); });
+    const get=f=>gj("",f).catch(()=>AB?gj(AB,f):Promise.reject());
+    get("yz.json").then(j=>{ YZ=(j&&j.e)||[]; }).catch(()=>{});
+    loading=get("sidx.json").then(j=>new Promise(res=>{ SIDX=(j&&j.e)||{}; const ids=Object.keys(SIDX); let i=0;
+        const step=()=>{ const end=performance.now()+12; while(i<ids.length&&performance.now()<end){ const r=BYID.get(ids[i]); if(r) addBody(r,SIDX[ids[i]]); i++; }
+          if(i<ids.length) setTimeout(step,0); else { BODY=true; buildVoc(); status(); res(); } };
+        step(); }))
+      .catch(()=>{ const st=$("srs"); if(st) st.textContent=IX.length+" קארטלעך · די נאָטיצן האבן זיך נישט געלאָדט (נאר נעמען, ערטער און דאטעס)"; });
+    loading.then(()=>{ if(!ov.hidden&&$("srq").value.trim()) run(true); });
+    return loading; }
+  /* ---------- the panel ---------- */
+  const bt=document.createElement("button"); bt.id="srb"; bt.type="button"; bt.setAttribute("aria-label","זוכן");
+  bt.innerHTML='<svg viewBox="0 0 24 24" width="19" height="19"><circle cx="10.4" cy="10.4" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15 15l5.3 5.3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+  if(gear&&gear.parentNode) gear.parentNode.insertBefore(bt,gear.nextSibling); else document.body.appendChild(bt);
+  const ov=document.createElement("div"); ov.id="srp"; ov.hidden=true; ov.setAttribute("role","dialog"); ov.setAttribute("aria-label","זוכן");
+  ov.innerHTML='<div class="yzh"><b>זוכן</b><button id="srx" type="button" aria-label="צומאכן">✕</button></div>'+
+    '<div class="srw"><input id="srq" type="search" enterkeyhint="search" placeholder="זוך אלעס: נאָמען, שטאָט, יאָר, ספר…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" dir="auto"><button id="src" type="button" aria-label="אויסמעקן" hidden>⌫</button></div>'+
+    '<div id="srs" class="srst"></div><div id="srl"></div>';
+  document.body.appendChild(ov);
+  const inp=$("srq");
+  let pushed=false, skipPop=false;
+  function open(){ ov.hidden=false; if(pn&&!pn.hidden){ pn.hidden=true; if(gear) gear.classList.remove("on"); } bt.classList.add("on");
+    if(!pushed){ try{ history.pushState({ysr:1},""); pushed=true; }catch(e){} }
+    load(); if(!inp.value.trim()) srHome(); else run(true); setTimeout(()=>{ try{ inp.focus({preventScroll:true}); }catch(e){ inp.focus(); } },30); }
+  function close(fromPop){ if(ov.hidden) return; ov.hidden=true; bt.classList.remove("on"); try{ inp.blur(); }catch(e){}
+    if(pushed&&!fromPop){ pushed=false; skipPop=true; try{ history.back(); }catch(e){ skipPop=false; } } else pushed=false; }
+  window.addEventListener("popstate",()=>{ if(skipPop){ skipPop=false; return; } if(!ov.hidden){ pushed=false; close(true); } });
+  bt.onclick=()=>{ if(ov.hidden) open(); else close(); };
+  $("srx").onclick=()=>close();
+  ov.addEventListener("click",ev=>{ if(ev.target===ov) close(); });
+  document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&!ov.hidden){ ev.preventDefault(); close(); } });
+  let tm=null;
+  function run(now){ const q=inp.value; $("src").hidden=!q; LIMIT=40; if(!q.trim()){ srHome(); return; } if(!IX.length) buildCore();
+    const go=()=>{ lastQ=q; lastRes=search(q); render(lastRes); $("srl").scrollTop=0; window.__srLast=lastRes; };
+    clearTimeout(tm); if(now) go(); else tm=setTimeout(go,130); }
+  inp.addEventListener("input",()=>run(false));
+  inp.addEventListener("keydown",ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); run(true); remember(inp.value); try{ inp.blur(); }catch(e){} } });
+  $("src").onclick=()=>{ inp.value=""; run(true); inp.focus(); };
+  function jump(id){ if(!P[id]) return; remember(inp.value); close(); if(pn){ pn.hidden=true; if(gear) gear.classList.remove("on"); }
+    const tgt=(typeof N!=="undefined"&&N[id])?id:((P[id].sibof&&typeof N!=="undefined"&&N[P[id].sibof])?P[id].sibof:null);
+    if(tgt){ focus(tgt,Math.max(s,0.75)); PULSE={id:tgt,t0:performance.now()}; }
+    openSheet(id); dirty=true; }
+  $("srl").addEventListener("click",ev=>{ const a=ev.target.closest("[data-q]"); if(a){ ev.preventDefault(); inp.value=a.dataset.q; run(true); if(!a.classList.contains("srrec")&&!a.classList.contains("srex")) remember(inp.value); return; }
+    if(ev.target.closest(".srclr")){ ev.preventDefault(); try{ localStorage.removeItem(RK); }catch(e){} srHome(); return; }
+    if(ev.target.closest(".srmore")){ LIMIT+=40; if(lastRes) render(lastRes); return; }
+    const f=ev.target.closest("[data-pill]"); if(f){ remember(inp.value); close(); if(pn) pn.hidden=true; const id=f.dataset.pill; if(typeof N!=="undefined"&&N[id]) pillJump(id); return; }
+    const b=ev.target.closest(".srr[data-id]"); if(b) jump(b.dataset.id); });
+  window.__sr={open, close, search:q=>{ if(!IX.length) buildCore(); return search(q); }, load, nz, lz, pk, ready:()=>BODY, jump, stat:()=>({voc:VOCL&&VOCL.length,keys:VOCK&&VOCK.size,cards:IX.length})};
+})();
+/* /SEARCH_V1 */

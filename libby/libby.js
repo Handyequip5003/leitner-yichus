@@ -1,5 +1,5 @@
 /* LIBBY SITE lock (built by build_libby.py — do not edit by hand): PIN screen, WebCrypto PBKDF2-SHA256 -> AES-256-GCM,
-   decrypts x/c.bin into window.YDATA, serves d/NN.json + yz.json from x/*.bin, then loads app.js. Key remembered in localStorage. */
+   decrypts x/c.bin into window.YDATA, serves d/NN.json + yz.json + sidx.json (SEARCH_V1) from x/*.bin, then loads app.js. Key remembered in localStorage. */
 (function(){ "use strict";
 const V=window.YV||"", LK="libby_key_v1", te=new TextDecoder();
 const $=id=>document.getElementById(id);
@@ -12,7 +12,7 @@ function derive(pin){ return crypto.subtle.importKey("raw",new TextEncoder().enc
 function imp(raw){ return crypto.subtle.importKey("raw",b64(raw),{name:"AES-GCM"},true,["decrypt"]); }
 /* the app asks for d/NN.json and yz.json: answer them from the encrypted copies, never from the network */
 const of=window.fetch.bind(window);
-window.fetch=function(u,o){ const s=String(u&&u.url||u); let m=s.match(/(?:^|\/)d\/(\d\d)\.json/), n=m?m[1]:(/(?:^|\/)yz\.json/.test(s)?"y":null);
+window.fetch=function(u,o){ const s=String(u&&u.url||u); let m=s.match(/(?:^|\/)d\/(\d\d)\.json/), n=m?m[1]:(/(?:^|\/)yz\.json/.test(s)?"y":(/(?:^|\/)sidx\.json/.test(s)?"s":null));   /* SEARCH_V1: sidx.json from x/s.bin */
   if(!n||!KEY) return of(u,o);
   const p=CACHE[n]||(CACHE[n]=bin(n).then(b=>dec(b)));
   return p.then(t=>new Response(t,{status:200,headers:{"Content-Type":"application/json"}}),e=>{ delete CACHE[n]; throw e; }); };
