@@ -644,3 +644,53 @@ window.__yt={N,rows,maxDep,draw,s:()=>s,focus,openSheet,openZoom,home};
   window.__yz={HF,FX,RD,open:()=>bt.onclick()};
 })();
 /* /YAHRZEIT_V1 */
+
+/* LEGEND_V1 (Alter 8:48 PM Nov 9 "In setting put 1 line to click to view the lists"): ⚙ → "🎨 וואס מיינען די קאלירן" — what every colour, circle and line on the tree means; family colours read from BRC/TINT, circles from MKC */
+(function(){
+  const pn=document.getElementById("setp"); if(!pn||document.getElementById("lgb")) return;
+  const FN={L:"לייטנער",W:"וואגשאהל",R:"רובין",M:"מייזליש",T:"טייטלבוים",H:"האלבערשטאם",S:"שפירא",Y:"מאיער",K:"טארים",V:"וויינבערגער",G:"שווארץ",B:"ראבינאוויטש",Z:"קרישעווסקי",N:"מענדלאוויטש",X:"ווייס"};
+  const bt=document.createElement("button"); bt.id="lgb"; bt.type="button"; bt.innerHTML='<span>🎨 וואס מיינען די קאלירן</span><small>די קאלירן פון די משפחות, די קרייזלעך און די ליניעס</small>';
+  const yb=document.getElementById("yzb"), st=pn.querySelector("#s_stats");
+  if(yb&&yb.parentNode===pn) pn.insertBefore(bt,yb.nextSibling); else if(st) pn.insertBefore(bt,st); else pn.appendChild(bt);
+  const ov=document.createElement("div"); ov.id="lgp"; ov.hidden=true; ov.setAttribute("role","dialog"); ov.setAttribute("aria-label","וואס מיינען די קאלירן");
+  ov.innerHTML='<div class="yzh"><b>וואס מיינען די קאלירן</b><button id="lgx" aria-label="צומאכן">✕</button></div><div id="lgl"></div>';
+  document.body.appendChild(ov);
+  const tn=k=>(typeof TINT!=="undefined"&&TINT[k])||"#fffaf0", gd=(typeof C!=="undefined"&&C.gold)||"#a8803c", mr=(typeof C!=="undefined"&&C.mar)||"#7B2D3A", sc=(typeof SEE_COLOR!=="undefined"&&SEE_COLOR)||"#B07A0E";
+  const lcx=h=>(typeof lcol==="function"?lcol(h):h);
+  const card=(bg,top,ex)=>'<span class="lgc" style="background:'+bg+';border-top-color:'+top+(ex?';'+ex:'')+'"></span>';
+  const row=(sw,t,sm)=>'<div class="lgr">'+sw+'<span class="lgt">'+t+(sm?'<small>'+sm+'</small>':'')+'</span></div>';
+  function build(){
+    let h='<h4>די משפחות</h4><p class="lgm">יעדער קארטל איז געפארבט אין דעם קאליר פון דער משפחה צו וועלכער ער געהערט: א ליכטיגער הינטערגרונט, און א פולער קאליר אויבן אויפן ראנד.</p>';
+    h+='<div class="lgfam">'; for(const k in BRC) h+='<div class="lgf">'+card(tn(k),BRC[k])+'<span>'+(FN[k]||("משפחה "+k))+'</span></div>'; h+='</div>';
+    const ks=Object.keys(BRC), a=ks[0]||"L", b=ks[1]||a, ca=lcx(BRC[a]), cb=lcx(BRC[b]);
+    h+=row(card('linear-gradient(90deg,'+tn(b)+' 0 38%,'+tn(a)+' 62% 100%)',BRC[a]),'א קארטל פון צוויי משפחות','ווען א פרוי פון איין משפחה האט חתונה געהאט אין אן אנדער משפחה, איז איר קארטל צעטיילט אין צוויי קאלירן: די העלפט וואס קוקט צו איר מאן איז אין זיין משפחה\'ס קאליר, די אנדערע העלפט אין איר אייגענעם קאליר.');
+    h+='<h4>די קרייזלעך אויבן אויפן קארטל</h4><p class="lgm">ווי זיכער מען איז אין דעם וואס שטייט אויפן קארטל.</p>';
+    const MK=(typeof MKC!=="undefined"&&MKC)||{};
+    const dot=m=>{ const k=MK[m]||["#a33","?"]; return '<span class="lgd" style="background:'+k[0]+'">'+k[1]+'</span>'; };
+    h+=row(dot("ok"),'באשטעטיגט פון א רעקארד אדער מצבה')+row(dot("inf"),'בערך / נאענטע פאסונג','אפגעלערנט פון מקורות, נישט גלייך געשריבן')+row(dot("unv"),'פון א בוים, נישט באשטעטיגט','פון אן אילן פון אנדערע אדער פון א מסורה')+row(dot("alt"),'פון אלטר לייטנער','וואס אלטר אליין האט געגעבן');
+    h+='<h4>אין אן אפענעם קארטל</h4>';
+    h+=row('<span class="vb q">נישט באשטעטיגט</span>','א רויטער צייכן','די זאך איז נאך נישט באשטעטיגט (למשל, נאר פון א בוים אויף געני)')+row('<span class="vb a">בערך</span>','א געלבלעכער צייכן','די זאך איז בערך, נישט גענוי');
+    h+=row('<span class="lgms" style="color:'+gd+'">לויט מסורה</span>','לויט מסורה','וואס די משפחה דערציילט, נישט פון א געשריבענעם מקור. אזא קארטל האט אויפן בוים א געשטריכלטן ראנד.');
+    const svg=(w,inner)=>'<svg class="lgs" viewBox="0 0 '+w+' 30" width="'+w+'" height="30" aria-hidden="true">'+inner+'</svg>';
+    h+='<h4>די ליניעס</h4>';
+    const ringS='<circle cx="39" cy="15" r="8" fill="#fffaf0" stroke="'+mr+'" stroke-width="2.2"/><circle cx="49" cy="15" r="8" fill="#fffaf0" stroke="'+mr+'" stroke-width="2.2"/><circle cx="39" cy="15" r="8" fill="none" stroke="'+mr+'" stroke-width="2.2"/>';
+    h+=row(svg(88,'<defs><linearGradient id="lgg" x1="0" x2="1"><stop offset="0" stop-color="'+ca+'"/><stop offset="1" stop-color="'+cb+'"/></linearGradient></defs><path d="M2 10H86M2 20H86" stroke="url(#lgg)" stroke-width="3" fill="none"/>'+ringS),
+      'א טאפלטע ליניע מיט ⚭ = חתונה','צווישן מאן און ווייב. יעדער עק פון דער ליניע איז אין דעם קאליר פון דעם וואס שטייט דארט: זיין קאליר ביי אים, איר קאליר ביי איר.');
+    h+=row(svg(88,'<path d="M86 4V15H2V28" stroke="'+ca+'" stroke-width="3" fill="none" stroke-linejoin="round"/>'),'די ליניע פון א קינד צו די עלטערן','אין דעם קאליר פון דער משפחה פון דעם קינד. ווען מען טאפט א קארטל, ווערן זיינע ליניעס דיק.');
+    h+=row(svg(88,'<path d="M84 26V14H14" stroke="'+sc+'" stroke-width="3" stroke-dasharray="9 6" fill="none"/><path d="M14 6L3 14L14 22Z" fill="'+sc+'"/>'),'א געלבלעכע געשטריכלטע ליניע = "זעה אויבן"','דער זעלבער מענטש איז אויך געוויזן אויף אן אנדער ארט אויפן בוים; די ליניע ווייזט אהין. געווענליך איז עס אויסגעלאשן; מען צינדט עס אן דא אין ⚙ ("ליניעס צו \'זעה אויבן\'").');
+    h+=row('<span class="lgstub" style="border-color:'+BRC[a]+'">זעה אויבן ⟵</span>','א קליין געשטריכלט קעסטל "זעה אויבן"','דער מענטש שטייט שוין אויף אן אנדער ארט אויפן בוים. טאפט עס, און מען פליט צום קארטל.');
+    h+='<h4>נאך צייכנס</h4>';
+    h+=row('<span class="lgdia" style="background:'+gd+'"></span>','א גאלדענער ♦ פארן נאמען = א רב','א רב, א גאון, אן אדמו"ר אדער א דיין.');
+    h+=row('<span class="lgband"><i></i><i></i><b>דור 3</b></span>','"דור" שטרייפן','יעדער דור איז א שטרייף איבערן גאנצן בוים; איינס פון צוויי איז א ביסל טונקעלער. "דור 1" זענען די עלטערן, "דור 2" די זיידעס און באבעס, און אזוי ווייטער ארויף.');
+    h+=row(card(tn("L"),BRC.L||"#6d4321",'border-color:'+gd+';box-shadow:0 0 0 2px #b08d57;border-top-width:7px'),'אלטר\'ס אייגענער קארטל','א גאלדענע ראם און א ברייטערער קאליר אויבן. א קארטל וואס מען האט אנגעטאפט באקומט אויך א גאלדענע ראם.');
+    h+=row('<span class="lgph" style="border-color:'+BRC[b]+'"></span>','א בילד אין א קרייזל','דער ראנד פון דעם בילד איז אין דעם קאליר פון דער משפחה.');
+    h+=row('<span class="lgnew">נייַ</span>','"נייַ" מיט א גאלדענעם שיין','ווען "וואָס איז נייַ" איז אן, שיינען די קארטלעך וואס זענען לעצטנס צוגעקומען אדער געטוישט געווארן.');
+    document.getElementById("lgl").innerHTML=h; }
+  const close=()=>{ ov.hidden=true; };
+  document.getElementById("lgx").onclick=close;
+  ov.addEventListener("click",ev=>{ if(ev.target===ov) close(); });
+  document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&!ov.hidden) close(); });
+  let done=false; bt.onclick=()=>{ if(!done){ try{ build(); }catch(e){ document.getElementById("lgl").innerHTML='<p class="lgm">'+String(e)+'</p>'; } done=true; } ov.hidden=false; document.getElementById("lgl").scrollTop=0; };
+  window.__lg={open:()=>bt.onclick()};
+})();
+/* /LEGEND_V1 */
